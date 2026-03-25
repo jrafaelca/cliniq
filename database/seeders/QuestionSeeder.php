@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Subject;
 use Illuminate\Database\Seeder;
 
 class QuestionSeeder extends Seeder
@@ -13,6 +15,24 @@ class QuestionSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            SubjectSeeder::class,
+            CategorySeeder::class,
+        ]);
+
+        $technicalSubjectId = Subject::query()
+            ->where('slug', Subject::SLUG_TECHNICAL)
+            ->value('id');
+
+        $technicalGeneralCategoryId = Category::query()
+            ->where('subject_id', $technicalSubjectId)
+            ->where('slug', Category::SLUG_GENERAL)
+            ->value('id');
+
+        if ($technicalSubjectId === null || $technicalGeneralCategoryId === null) {
+            return;
+        }
+
         if (Question::query()->exists()) {
             return;
         }
@@ -135,6 +155,9 @@ class QuestionSeeder extends Seeder
                 'statement' => $payload['statement'],
                 'explanation' => $payload['explanation'],
                 'type' => $payload['type'],
+                'subject_id' => $technicalSubjectId,
+                'category_id' => $technicalGeneralCategoryId,
+                'topic_id' => null,
             ]);
 
             foreach ($payload['options'] as $option) {

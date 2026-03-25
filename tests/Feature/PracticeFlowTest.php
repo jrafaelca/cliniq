@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Attempt;
 use App\Models\AttemptAnswer;
+use App\Models\Category;
 use App\Models\Question;
 use App\Models\QuestionOption;
+use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -74,6 +76,48 @@ class PracticeFlowTest extends TestCase
 
         $response->assertRedirect(route('practice.show', $activeAttempt));
         $this->assertDatabaseCount('attempts', 1);
+    }
+
+    public function test_start_filters_questions_by_user_subject_when_present()
+    {
+        $medicine = Subject::factory()->create();
+        $technical = Subject::factory()->create();
+
+        $medicineCategory = Category::factory()->create([
+            'subject_id' => $medicine->id,
+        ]);
+
+        $technicalCategory = Category::factory()->create([
+            'subject_id' => $technical->id,
+        ]);
+
+        $matchingQuestions = Question::factory()
+            ->count(3)
+            ->create([
+                'subject_id' => $medicine->id,
+                'category_id' => $medicineCategory->id,
+                'topic_id' => null,
+            ]);
+
+        Question::factory()
+            ->count(4)
+            ->create([
+                'subject_id' => $technical->id,
+                'category_id' => $technicalCategory->id,
+                'topic_id' => null,
+            ]);
+
+        $user = User::factory()->withSubject($medicine->id)->create();
+
+        $response = $this->actingAs($user)->post(route('practice.start'));
+
+        $attempt = Attempt::query()->first();
+
+        $this->assertNotNull($attempt);
+        $this->assertCount(3, $attempt->question_ids);
+        $this->assertEqualsCanonicalizing($matchingQuestions->pluck('id')->all(), $attempt->question_ids);
+
+        $response->assertRedirect(route('practice.show', $attempt));
     }
 
     public function test_start_redirects_with_error_when_no_questions_exist()

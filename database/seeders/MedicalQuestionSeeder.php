@@ -2,7 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use App\Models\Question;
+use App\Models\Subject;
+use App\Models\Topic;
 use Illuminate\Database\Seeder;
 
 class MedicalQuestionSeeder extends Seeder
@@ -12,12 +15,46 @@ class MedicalQuestionSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            SubjectSeeder::class,
+            CategorySeeder::class,
+            TopicSeeder::class,
+        ]);
+
+        $medicineSubjectId = Subject::query()
+            ->where('slug', Subject::SLUG_MEDICINE)
+            ->value('id');
+
+        if ($medicineSubjectId === null) {
+            return;
+        }
+
+        $categoryIds = Category::query()
+            ->where('subject_id', $medicineSubjectId)
+            ->pluck('id', 'slug');
+
+        $topicIds = Topic::query()
+            ->whereIn('category_id', $categoryIds->values())
+            ->pluck('id', 'slug');
+
         foreach ($this->questions() as $payload) {
+            $categorySlug = $this->determineCategorySlug($payload);
+            $categoryId = $categoryIds->get($categorySlug) ?? $categoryIds->get(Category::SLUG_CARDIOLOGY);
+
+            if ($categoryId === null) {
+                continue;
+            }
+
+            $topicSlug = $this->determineTopicSlug($payload, $categorySlug);
+
             $question = Question::query()->updateOrCreate(
                 ['statement' => $payload['statement']],
                 [
                     'explanation' => $payload['explanation'],
                     'type' => $payload['type'],
+                    'subject_id' => $medicineSubjectId,
+                    'category_id' => $categoryId,
+                    'topic_id' => $topicSlug === null ? null : $topicIds->get($topicSlug),
                 ],
             );
 
@@ -262,5 +299,56 @@ class MedicalQuestionSeeder extends Seeder
                 ],
             ],
         ];
+    }
+
+    /**
+     * @param  array{statement: string, explanation: string, type: string, options: array<int, array{text: string, is_correct: bool}>}  $payload
+     */
+    private function determineCategorySlug(array $payload): string
+    {
+        $haystack = mb_strtolower($payload['statement'].' '.$payload['explanation']);
+
+        if (
+            str_contains($haystack, 'respir')
+            || str_contains($haystack, 'pulm')
+            || str_contains($haystack, 'oxígeno')
+            || str_contains($haystack, 'oxigeno')
+        ) {
+            return Category::SLUG_RESPIRATORY;
+        }
+
+        if (
+            str_contains($haystack, 'gastro')
+            || str_contains($haystack, 'diarrea')
+            || str_contains($haystack, 'hígado')
+            || str_contains($haystack, 'higado')
+            || str_contains($haystack, 'digest')
+        ) {
+            return Category::SLUG_GASTROENTEROLOGY;
+        }
+
+        return Category::SLUG_CARDIOLOGY;
+    }
+
+    /**
+     * @param  array{statement: string, explanation: string, type: string, options: array<int, array{text: string, is_correct: bool}>}  $payload
+     */
+    private function determineTopicSlug(array $payload, string $categorySlug): ?string
+    {
+        if ($categorySlug !== Category::SLUG_CARDIOLOGY) {
+            return null;
+        }
+
+        $haystack = mb_strtolower($payload['statement'].' '.$payload['explanation']);
+
+        if (str_contains($haystack, 'infarto') || str_contains($haystack, 'coronario agudo')) {
+            return Topic::SLUG_ACUTE_MYOCARDIAL_INFARCTION;
+        }
+
+        if (str_contains($haystack, 'arritmi') || str_contains($haystack, 'frecuencia cardíaca') || str_contains($haystack, 'frecuencia cardiaca')) {
+            return Topic::SLUG_ARRHYTHMIAS;
+        }
+
+        return null;
     }
 }

@@ -13,7 +13,11 @@ class DemoSeeder extends Seeder
     {
         $this->call([
             AdminUserSeeder::class,
+            SubjectSeeder::class,
+            CategorySeeder::class,
+            TopicSeeder::class,
             TechnicalQuestionSeeder::class,
+            MedicalQuestionSeeder::class,
         ]);
     }
 }

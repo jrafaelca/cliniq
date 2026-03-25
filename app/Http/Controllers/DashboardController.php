@@ -43,9 +43,15 @@ class DashboardController extends Controller
             ];
         }
 
+        $questionsQuery = Question::query();
+
+        if ($user->subject_id !== null) {
+            $questionsQuery->where('subject_id', $user->subject_id);
+        }
+
         return Inertia::render('Dashboard', [
             'activeAttemptId' => $activeAttempt?->id,
-            'hasQuestions' => Question::query()->exists(),
+            'hasQuestions' => $questionsQuery->exists(),
             'practiceError' => $request->session()->get('practice_error'),
             'latestResult' => $latestResult,
         ]);

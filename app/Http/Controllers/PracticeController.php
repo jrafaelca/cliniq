@@ -30,7 +30,13 @@ class PracticeController extends Controller
             return to_route('practice.show', $activeAttempt);
         }
 
-        $questionIds = Question::query()
+        $questionsQuery = Question::query();
+
+        if ($user->subject_id !== null) {
+            $questionsQuery->where('subject_id', $user->subject_id);
+        }
+
+        $questionIds = $questionsQuery
             ->inRandomOrder()
             ->limit(10)
             ->pluck('id')

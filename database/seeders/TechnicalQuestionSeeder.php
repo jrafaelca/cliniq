@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Category;
 use App\Models\Question;
+use App\Models\Subject;
 use Illuminate\Database\Seeder;
 
 class TechnicalQuestionSeeder extends Seeder
@@ -12,12 +14,33 @@ class TechnicalQuestionSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call([
+            SubjectSeeder::class,
+            CategorySeeder::class,
+        ]);
+
+        $technicalSubjectId = Subject::query()
+            ->where('slug', Subject::SLUG_TECHNICAL)
+            ->value('id');
+
+        $technicalGeneralCategoryId = Category::query()
+            ->where('subject_id', $technicalSubjectId)
+            ->where('slug', Category::SLUG_GENERAL)
+            ->value('id');
+
+        if ($technicalSubjectId === null || $technicalGeneralCategoryId === null) {
+            return;
+        }
+
         foreach ($this->questions() as $payload) {
             $question = Question::query()->updateOrCreate(
                 ['statement' => $payload['statement']],
                 [
                     'explanation' => $payload['explanation'],
                     'type' => $payload['type'],
+                    'subject_id' => $technicalSubjectId,
+                    'category_id' => $technicalGeneralCategoryId,
+                    'topic_id' => null,
                 ],
             );
 
