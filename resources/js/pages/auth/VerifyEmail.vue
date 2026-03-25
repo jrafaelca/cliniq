@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -14,17 +15,16 @@ defineProps<{
 
 <template>
     <AuthLayout
-        title="Verify email"
-        description="Please verify your email address by clicking on the link we just emailed to you."
+        :title="trans('auth.verify_email_page_title')"
+        :description="trans('auth.verify_email_page_description')"
     >
-        <Head title="Email verification" />
+        <Head :title="trans('auth.verify_email_head_title')" />
 
         <div
             v-if="status === 'verification-link-sent'"
             class="mb-4 text-center text-sm font-medium text-green-600"
         >
-            A new verification link has been sent to the email address you
-            provided during registration.
+            {{ trans('auth.verify_email_link_sent_status') }}
         </div>
 
         <Form
@@ -34,7 +34,7 @@ defineProps<{
         >
             <Button :disabled="processing" variant="secondary">
                 <Spinner v-if="processing" />
-                Resend verification email
+                {{ trans('auth.resend_verification_email_button') }}
             </Button>
 
             <TextLink
@@ -42,7 +42,7 @@ defineProps<{
                 as="button"
                 class="mx-auto block text-sm"
             >
-                Log out
+                {{ trans('auth.log_out_link') }}
             </TextLink>
         </Form>
     </AuthLayout>

@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'heading_title' => 'Autenticación de dos factores',
+    'heading_description' => 'Administra tu configuración de autenticación de dos factores.',
+    'enable_message' => 'Cuando actives la autenticación de dos factores, se te pedirá un pin seguro al iniciar sesión. Puedes obtener este pin en una aplicación compatible con TOTP en tu teléfono.',
+    'continue_setup_button' => 'Continuar configuración',
+    'enable_button' => 'Activar 2FA',
+    'disable_message' => 'Se te pedirá un pin seguro y aleatorio al iniciar sesión, que puedes obtener en la aplicación compatible con TOTP de tu teléfono.',
+    'disable_button' => 'Desactivar 2FA',
+    'recovery_codes_title' => 'Códigos de recuperación 2FA',
+    'recovery_codes_description' => 'Los códigos de recuperación te permiten recuperar acceso si pierdes tu dispositivo 2FA. Guárdalos en un gestor de contraseñas seguro.',
+    'hide_recovery_codes_button' => 'Ocultar códigos de recuperación',
+    'view_recovery_codes_button' => 'Ver códigos de recuperación',
+    'regenerate_codes_button' => 'Regenerar códigos',
+    'recovery_codes_note' => 'Cada código de recuperación se puede usar una sola vez para acceder a tu cuenta y será eliminado después de su uso. Si necesitas más, haz clic arriba en Regenerar códigos.',
+    'modal_enabled_title' => 'Autenticación de dos factores activada',
+    'modal_enabled_description' => 'La autenticación de dos factores ya está activa. Escanea el código QR o ingresa la clave de configuración en tu app autenticadora.',
+    'modal_enabled_button' => 'Cerrar',
+    'modal_verify_title' => 'Verificar código de autenticación',
+    'modal_verify_description' => 'Ingresa el código de 6 dígitos de tu app autenticadora.',
+    'modal_verify_button' => 'Continuar',
+    'modal_enable_title' => 'Activar autenticación de dos factores',
+    'modal_enable_description' => 'Para terminar de activar la autenticación de dos factores, escanea el código QR o ingresa la clave de configuración en tu app autenticadora.',
+    'manual_code_hint' => 'o ingresa el código manualmente',
+    'back_button' => 'Volver',
+    'confirm_button' => 'Confirmar',
+];

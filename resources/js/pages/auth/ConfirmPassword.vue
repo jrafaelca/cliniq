@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
@@ -11,10 +12,10 @@ import { store } from '@/routes/password/confirm';
 
 <template>
     <AuthLayout
-        title="Confirm your password"
-        description="This is a secure area of the application. Please confirm your password before continuing."
+        :title="trans('auth.confirm_password_page_title')"
+        :description="trans('auth.confirm_password_page_description')"
     >
-        <Head title="Confirm password" />
+        <Head :title="trans('auth.confirm_password_head_title')" />
 
         <Form
             v-bind="store.form()"
@@ -23,7 +24,7 @@ import { store } from '@/routes/password/confirm';
         >
             <div class="space-y-6">
                 <div class="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">{{ trans('auth.password_label') }}</Label>
                     <PasswordInput
                         id="password"
                         name="password"
@@ -43,7 +44,7 @@ import { store } from '@/routes/password/confirm';
                         data-test="confirm-password-button"
                     >
                         <Spinner v-if="processing" />
-                        Confirm password
+                        {{ trans('auth.confirm_password_submit_button') }}
                     </Button>
                 </div>
             </div>

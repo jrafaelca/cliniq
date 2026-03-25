@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { useTemplateRef } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/Heading.vue';
@@ -25,22 +26,22 @@ const passwordInput = useTemplateRef('passwordInput');
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="Delete account"
-            description="Delete your account and all of its resources"
+            :title="trans('profile.delete_account_title')"
+            :description="trans('profile.delete_account_description')"
         />
         <div
             class="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10"
         >
             <div class="relative space-y-0.5 text-red-600 dark:text-red-100">
-                <p class="font-medium">Warning</p>
+                <p class="font-medium">{{ trans('profile.warning_title') }}</p>
                 <p class="text-sm">
-                    Please proceed with caution, this cannot be undone.
+                    {{ trans('profile.warning_description') }}
                 </p>
             </div>
             <Dialog>
                 <DialogTrigger as-child>
                     <Button variant="destructive" data-test="delete-user-button"
-                        >Delete account</Button
+                        >{{ trans('profile.delete_account_button') }}</Button
                     >
                 </DialogTrigger>
                 <DialogContent>
@@ -56,27 +57,22 @@ const passwordInput = useTemplateRef('passwordInput');
                     >
                         <DialogHeader class="space-y-3">
                             <DialogTitle
-                                >Are you sure you want to delete your
-                                account?</DialogTitle
+                                >{{ trans('profile.confirm_delete_title') }}</DialogTitle
                             >
                             <DialogDescription>
-                                Once your account is deleted, all of its
-                                resources and data will also be permanently
-                                deleted. Please enter your password to confirm
-                                you would like to permanently delete your
-                                account.
+                                {{ trans('profile.confirm_delete_description') }}
                             </DialogDescription>
                         </DialogHeader>
 
                         <div class="grid gap-2">
                             <Label for="password" class="sr-only"
-                                >Password</Label
+                                >{{ trans('auth.password_label') }}</Label
                             >
                             <PasswordInput
                                 id="password"
                                 name="password"
                                 ref="passwordInput"
-                                placeholder="Password"
+                                :placeholder="trans('auth.password_placeholder')"
                             />
                             <InputError :message="errors.password" />
                         </div>
@@ -92,7 +88,7 @@ const passwordInput = useTemplateRef('passwordInput');
                                         }
                                     "
                                 >
-                                    Cancel
+                                    {{ trans('profile.cancel_button') }}
                                 </Button>
                             </DialogClose>
 
@@ -102,7 +98,7 @@ const passwordInput = useTemplateRef('passwordInput');
                                 :disabled="processing"
                                 data-test="confirm-delete-user-button"
                             >
-                                Delete account
+                                {{ trans('profile.delete_account_button') }}
                             </Button>
                         </DialogFooter>
                     </Form>

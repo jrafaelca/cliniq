@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
+import { computed } from 'vue';
 import AppearanceTabs from '@/components/AppearanceTabs.vue';
 import Heading from '@/components/Heading.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -7,26 +9,26 @@ import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { edit } from '@/routes/appearance';
 import type { BreadcrumbItem } from '@/types';
 
-const breadcrumbItems: BreadcrumbItem[] = [
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Appearance settings',
+        title: trans('settings.appearance_breadcrumb'),
         href: edit(),
     },
-];
+]);
 </script>
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Appearance settings" />
+        <Head :title="trans('settings.appearance_head_title')" />
 
-        <h1 class="sr-only">Appearance settings</h1>
+        <h1 class="sr-only">{{ trans('settings.appearance_sr_title') }}</h1>
 
         <SettingsLayout>
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Appearance settings"
-                    description="Update your account's appearance settings"
+                    :title="trans('settings.appearance_title')"
+                    :description="trans('settings.appearance_description')"
                 />
                 <AppearanceTabs />
             </div>

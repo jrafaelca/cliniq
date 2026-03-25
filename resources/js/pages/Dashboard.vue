@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,12 +34,12 @@ type Props = {
 
 const props = defineProps<Props>();
 
-const breadcrumbs: BreadcrumbItem[] = [
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Dashboard',
+        title: trans('dashboard.title'),
         href: dashboard(),
     },
-];
+]);
 
 const latestScore = computed(() => {
     if (!props.latestResult) {
@@ -50,16 +51,15 @@ const latestScore = computed(() => {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head :title="trans('dashboard.title')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Entrenamiento de práctica</CardTitle>
+                    <CardTitle>{{ trans('dashboard.practice_title') }}</CardTitle>
                     <CardDescription>
-                        Responde preguntas con feedback inmediato y mide tu
-                        progreso.
+                        {{ trans('dashboard.practice_description') }}
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-3">
@@ -74,7 +74,7 @@ const latestScore = computed(() => {
                         v-if="!hasQuestions"
                         class="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
                     >
-                        Aún no hay preguntas cargadas para iniciar la práctica.
+                        {{ trans('dashboard.no_questions') }}
                     </p>
                 </CardContent>
                 <CardFooter class="flex gap-3">
@@ -84,7 +84,7 @@ const latestScore = computed(() => {
                         class="w-full sm:w-auto"
                     >
                         <Link :href="show(activeAttemptId)">
-                            Reanudar práctica
+                            {{ trans('dashboard.resume') }}
                         </Link>
                     </Button>
 
@@ -99,7 +99,7 @@ const latestScore = computed(() => {
                             class="w-full sm:w-auto"
                             :disabled="!hasQuestions || processing"
                         >
-                            Comenzar práctica
+                            {{ trans('dashboard.start') }}
                         </Button>
                     </Form>
                 </CardFooter>
@@ -107,19 +107,19 @@ const latestScore = computed(() => {
 
             <Card v-if="latestResult">
                 <CardHeader>
-                    <CardTitle>Último resultado</CardTitle>
+                    <CardTitle>{{ trans('dashboard.latest_result') }}</CardTitle>
                     <CardDescription>
-                        Terminaste esta sesión con
-                        <span class="font-semibold text-foreground">
-                            {{ latestScore }}%
-                        </span>
-                        de aciertos.
+                        {{
+                            trans('dashboard.latest_result_description', {
+                                score: String(latestScore ?? 0),
+                            })
+                        }}
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="grid gap-4 sm:grid-cols-3">
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Correctas
+                            {{ trans('dashboard.correct') }}
                         </p>
                         <p class="text-xl font-semibold">
                             {{ latestResult.correct_count }}
@@ -127,7 +127,7 @@ const latestScore = computed(() => {
                     </div>
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Incorrectas
+                            {{ trans('dashboard.incorrect') }}
                         </p>
                         <p class="text-xl font-semibold">
                             {{ latestResult.incorrect_count }}
@@ -135,7 +135,7 @@ const latestScore = computed(() => {
                     </div>
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Total
+                            {{ trans('dashboard.total') }}
                         </p>
                         <p class="text-xl font-semibold">
                             {{ latestResult.total_questions }}
@@ -145,7 +145,7 @@ const latestScore = computed(() => {
                 <CardFooter>
                     <Button variant="secondary" as-child>
                         <Link :href="show(latestResult.attemptId)">
-                            Ver detalle
+                            {{ trans('dashboard.view_detail') }}
                         </Link>
                     </Button>
                 </CardFooter>
@@ -154,8 +154,7 @@ const latestScore = computed(() => {
                 v-else
                 class="rounded-lg border border-dashed p-6 text-sm text-muted-foreground"
             >
-                Todavía no tienes resultados finalizados. Inicia tu primera
-                práctica para ver tu score.
+                {{ trans('dashboard.no_results') }}
             </div>
         </div>
     </AppLayout>

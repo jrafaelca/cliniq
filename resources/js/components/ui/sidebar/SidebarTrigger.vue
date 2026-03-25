@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { trans } from 'laravel-vue-i18n'
 import type { HTMLAttributes } from "vue"
 import { PanelLeftClose, PanelLeftOpen } from "lucide-vue-next"
 import { cn } from "@/lib/utils"
@@ -23,6 +24,6 @@ const { isMobile, state, toggleSidebar } = useSidebar()
   >
     <PanelLeftOpen v-if="isMobile || state === 'collapsed'" />
     <PanelLeftClose v-else />
-    <span class="sr-only">Toggle sidebar</span>
+    <span class="sr-only">{{ trans('nav.toggle_sidebar') }}</span>
   </Button>
 </template>

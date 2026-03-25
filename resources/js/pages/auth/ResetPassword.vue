@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
@@ -20,10 +21,10 @@ const inputEmail = ref(props.email);
 
 <template>
     <AuthLayout
-        title="Reset password"
-        description="Please enter your new password below"
+        :title="trans('auth.reset_password_page_title')"
+        :description="trans('auth.reset_password_page_description')"
     >
-        <Head title="Reset password" />
+        <Head :title="trans('auth.reset_password_head_title')" />
 
         <Form
             v-bind="update.form()"
@@ -33,7 +34,7 @@ const inputEmail = ref(props.email);
         >
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="email">Email</Label>
+                    <Label for="email">{{ trans('auth.email_label') }}</Label>
                     <Input
                         id="email"
                         type="email"
@@ -47,28 +48,28 @@ const inputEmail = ref(props.email);
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password">Password</Label>
+                    <Label for="password">{{ trans('auth.password_label') }}</Label>
                     <PasswordInput
                         id="password"
                         name="password"
                         autocomplete="new-password"
                         class="mt-1 block w-full"
                         autofocus
-                        placeholder="Password"
+                        :placeholder="trans('auth.password_placeholder')"
                     />
                     <InputError :message="errors.password" />
                 </div>
 
                 <div class="grid gap-2">
                     <Label for="password_confirmation">
-                        Confirm password
+                        {{ trans('auth.confirm_password_label') }}
                     </Label>
                     <PasswordInput
                         id="password_confirmation"
                         name="password_confirmation"
                         autocomplete="new-password"
                         class="mt-1 block w-full"
-                        placeholder="Confirm password"
+                        :placeholder="trans('auth.confirm_password_placeholder')"
                     />
                     <InputError :message="errors.password_confirmation" />
                 </div>
@@ -80,7 +81,7 @@ const inputEmail = ref(props.email);
                     data-test="reset-password-button"
                 >
                     <Spinner v-if="processing" />
-                    Reset password
+                    {{ trans('auth.reset_password_submit_button') }}
                 </Button>
             </div>
         </Form>

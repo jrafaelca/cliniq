@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -16,18 +17,16 @@ import type { TwoFactorConfigContent } from '@/types';
 const authConfigContent = computed<TwoFactorConfigContent>(() => {
     if (showRecoveryInput.value) {
         return {
-            title: 'Recovery code',
-            description:
-                'Please confirm access to your account by entering one of your emergency recovery codes.',
-            buttonText: 'login using an authentication code',
+            title: trans('auth.two_factor_recovery_code_title'),
+            description: trans('auth.two_factor_recovery_code_description'),
+            buttonText: trans('auth.two_factor_login_using_authentication_code_button'),
         };
     }
 
     return {
-        title: 'Authentication code',
-        description:
-            'Enter the authentication code provided by your authenticator application.',
-        buttonText: 'login using a recovery code',
+        title: trans('auth.two_factor_authentication_code_title'),
+        description: trans('auth.two_factor_authentication_code_description'),
+        buttonText: trans('auth.two_factor_login_using_recovery_code_button'),
     };
 });
 
@@ -47,7 +46,7 @@ const code = ref<string>('');
         :title="authConfigContent.title"
         :description="authConfigContent.description"
     >
-        <Head title="Two-factor authentication" />
+        <Head :title="trans('auth.two_factor_head_title')" />
 
         <div class="space-y-6">
             <template v-if="!showRecoveryInput">
@@ -82,10 +81,10 @@ const code = ref<string>('');
                         <InputError :message="errors.code" />
                     </div>
                     <Button type="submit" class="w-full" :disabled="processing"
-                        >Continue</Button
+                        >{{ trans('auth.two_factor_continue_button') }}</Button
                     >
                     <div class="text-center text-sm text-muted-foreground">
-                        <span>or you can </span>
+                        <span>{{ trans('auth.two_factor_or_you_can_prefix') }} </span>
                         <button
                             type="button"
                             class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
@@ -107,17 +106,17 @@ const code = ref<string>('');
                     <Input
                         name="recovery_code"
                         type="text"
-                        placeholder="Enter recovery code"
+                        :placeholder="trans('auth.two_factor_recovery_code_placeholder')"
                         :autofocus="showRecoveryInput"
                         required
                     />
                     <InputError :message="errors.recovery_code" />
                     <Button type="submit" class="w-full" :disabled="processing"
-                        >Continue</Button
+                        >{{ trans('auth.two_factor_continue_button') }}</Button
                     >
 
                     <div class="text-center text-sm text-muted-foreground">
-                        <span>or you can </span>
+                        <span>{{ trans('auth.two_factor_or_you_can_prefix') }} </span>
                         <button
                             type="button"
                             class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"

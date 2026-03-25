@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'heading_title' => 'Two-factor authentication',
+    'heading_description' => 'Manage your two-factor authentication settings.',
+    'enable_message' => 'When you enable two-factor authentication, you will be prompted for a secure pin during login. This pin can be retrieved from a TOTP-supported application on your phone.',
+    'continue_setup_button' => 'Continue setup',
+    'enable_button' => 'Enable 2FA',
+    'disable_message' => 'You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.',
+    'disable_button' => 'Disable 2FA',
+    'recovery_codes_title' => '2FA recovery codes',
+    'recovery_codes_description' => 'Recovery codes let you regain access if you lose your 2FA device. Store them in a secure password manager.',
+    'hide_recovery_codes_button' => 'Hide recovery codes',
+    'view_recovery_codes_button' => 'View recovery codes',
+    'regenerate_codes_button' => 'Regenerate codes',
+    'recovery_codes_note' => 'Each recovery code can be used once to access your account and will be removed after use. If you need more, click Regenerate codes above.',
+    'modal_enabled_title' => 'Two-factor authentication enabled',
+    'modal_enabled_description' => 'Two-factor authentication is now enabled. Scan the QR code or enter the setup key in your authenticator app.',
+    'modal_enabled_button' => 'Close',
+    'modal_verify_title' => 'Verify authentication code',
+    'modal_verify_description' => 'Enter the 6-digit code from your authenticator app.',
+    'modal_verify_button' => 'Continue',
+    'modal_enable_title' => 'Enable two-factor authentication',
+    'modal_enable_description' => 'To finish enabling two-factor authentication, scan the QR code or enter the setup key in your authenticator app.',
+    'manual_code_hint' => 'or, enter the code manually',
+    'back_button' => 'Back',
+    'confirm_button' => 'Confirm',
+];

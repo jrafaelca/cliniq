@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,12 +28,12 @@ type Props = {
 
 const props = defineProps<Props>();
 
-const breadcrumbs: BreadcrumbItem[] = [
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Resultado',
+        title: trans('result.breadcrumb'),
         href: dashboard(),
     },
-];
+]);
 
 const scoreValue = computed(() => Math.round(Number(props.score ?? 0)));
 
@@ -54,24 +55,27 @@ const durationInMinutes = computed(() => {
 </script>
 
 <template>
-    <Head title="Resultado de práctica" />
+    <Head :title="trans('result.head_title')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle class="text-2xl">Sesión finalizada</CardTitle>
+                    <CardTitle class="text-2xl">{{
+                        trans('result.session_finished')
+                    }}</CardTitle>
                     <CardDescription>
-                        Tu score final es
-                        <span class="font-semibold text-foreground">
-                            {{ scoreValue }}%
-                        </span>
+                        {{
+                            trans('result.final_score', {
+                                score: String(scoreValue),
+                            })
+                        }}
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="grid gap-4 sm:grid-cols-3">
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Correctas
+                            {{ trans('dashboard.correct') }}
                         </p>
                         <p class="text-2xl font-semibold">
                             {{ correct_count }}
@@ -79,7 +83,7 @@ const durationInMinutes = computed(() => {
                     </div>
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Incorrectas
+                            {{ trans('dashboard.incorrect') }}
                         </p>
                         <p class="text-2xl font-semibold">
                             {{ incorrect_count }}
@@ -87,7 +91,7 @@ const durationInMinutes = computed(() => {
                     </div>
                     <div class="rounded-md border bg-muted/30 p-3">
                         <p class="text-xs uppercase text-muted-foreground">
-                            Total
+                            {{ trans('dashboard.total') }}
                         </p>
                         <p class="text-2xl font-semibold">
                             {{ total_questions }}
@@ -98,9 +102,13 @@ const durationInMinutes = computed(() => {
                     class="flex flex-col items-start gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
                 >
                     <p v-if="durationInMinutes !== null">
-                        Duración aproximada: {{ durationInMinutes }} minuto(s)
+                        {{
+                            trans('result.duration', {
+                                minutes: String(durationInMinutes),
+                            })
+                        }}
                     </p>
-                    <p v-else>Duración no disponible</p>
+                    <p v-else>{{ trans('result.duration_not_available') }}</p>
                 </CardFooter>
             </Card>
 
@@ -111,12 +119,18 @@ const durationInMinutes = computed(() => {
                     class="w-full sm:w-auto"
                 >
                     <Button type="submit" class="w-full sm:w-auto">
-                        {{ processing ? 'Iniciando...' : 'Volver a intentar' }}
+                        {{
+                            processing
+                                ? trans('result.starting')
+                                : trans('result.retry')
+                        }}
                     </Button>
                 </Form>
 
                 <Button variant="secondary" as-child class="w-full sm:w-auto">
-                    <Link :href="dashboard()">Ir al dashboard</Link>
+                    <Link :href="dashboard()">{{
+                        trans('result.back_dashboard')
+                    }}</Link>
                 </Button>
             </div>
         </div>

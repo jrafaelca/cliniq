@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { trans } from 'laravel-vue-i18n';
 import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -55,7 +56,7 @@ const props = defineProps<Props>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Práctica',
+        title: trans('practice.breadcrumb'),
         href: show(props.attemptId),
     },
 ]);
@@ -132,7 +133,7 @@ async function submitAnswer(): Promise<void> {
     const resolvedSelectedOptionIds = resolveSelectedOptionIds();
 
     if (resolvedSelectedOptionIds.length === 0) {
-        formError.value = 'Selecciona al menos una opción para continuar.';
+        formError.value = trans('practice.select_one_error');
 
         return;
     }
@@ -170,15 +171,14 @@ async function submitAnswer(): Promise<void> {
             formError.value =
                 (typeof firstError === 'string' && firstError) ||
                 payload?.message ||
-                'No se pudo registrar la respuesta. Inténtalo nuevamente.';
+                trans('practice.save_error');
 
             return;
         }
 
         feedback.value = payload as AnswerFeedback;
     } catch {
-        formError.value =
-            'No se pudo conectar con el servidor. Verifica tu conexión e inténtalo nuevamente.';
+        formError.value = trans('practice.network_error');
     } finally {
         isSubmitting.value = false;
     }
@@ -186,17 +186,26 @@ async function submitAnswer(): Promise<void> {
 </script>
 
 <template>
-    <Head title="Práctica" />
+    <Head :title="trans('practice.head_title')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4">
             <div class="space-y-2">
                 <div class="flex items-center justify-between text-sm">
                     <p class="font-medium text-muted-foreground">
-                        Pregunta {{ progress.current }} de {{ progress.total }}
+                        {{
+                            trans('practice.progress_question', {
+                                current: String(progress.current),
+                                total: String(progress.total),
+                            })
+                        }}
                     </p>
                     <p class="font-semibold text-foreground">
-                        {{ Math.round(progress.percent) }}% completado
+                        {{
+                            trans('practice.progress_completed', {
+                                percent: String(Math.round(progress.percent)),
+                            })
+                        }}
                     </p>
                 </div>
                 <Progress :model-value="progress.percent" />
@@ -210,8 +219,8 @@ async function submitAnswer(): Promise<void> {
                     <CardDescription>
                         {{
                             question.type === 'single'
-                                ? 'Selecciona una alternativa.'
-                                : 'Selecciona todas las alternativas correctas.'
+                                ? trans('practice.select_single')
+                                : trans('practice.select_multiple')
                         }}
                     </CardDescription>
                 </CardHeader>
@@ -275,7 +284,11 @@ async function submitAnswer(): Promise<void> {
                         :disabled="isSubmitting"
                         @click="submitAnswer"
                     >
-                        {{ isSubmitting ? 'Validando...' : 'Responder' }}
+                        {{
+                            isSubmitting
+                                ? trans('practice.validating')
+                                : trans('practice.answer')
+                        }}
                     </Button>
 
                     <Button
@@ -283,7 +296,9 @@ async function submitAnswer(): Promise<void> {
                         as-child
                         type="button"
                     >
-                        <Link :href="show(attemptId)">Siguiente pregunta</Link>
+                        <Link :href="show(attemptId)">{{
+                            trans('practice.next_question')
+                        }}</Link>
                     </Button>
 
                     <Form
@@ -292,7 +307,7 @@ async function submitAnswer(): Promise<void> {
                         v-slot="{ processing }"
                     >
                         <Button type="submit" :disabled="processing">
-                            Finalizar sesión
+                            {{ trans('practice.finish_session') }}
                         </Button>
                     </Form>
                 </CardFooter>
@@ -310,8 +325,8 @@ async function submitAnswer(): Promise<void> {
                     <CardTitle>
                         {{
                             feedback.is_correct
-                                ? 'Respuesta correcta'
-                                : 'Respuesta incorrecta'
+                                ? trans('practice.correct_feedback')
+                                : trans('practice.incorrect_feedback')
                         }}
                     </CardTitle>
                     <CardDescription>
@@ -320,7 +335,7 @@ async function submitAnswer(): Promise<void> {
                 </CardHeader>
                 <CardContent v-if="correctOptionsText.length > 0">
                     <p class="text-sm font-medium text-muted-foreground">
-                        Respuesta(s) correcta(s):
+                        {{ trans('practice.correct_options') }}
                     </p>
                     <ul class="mt-2 space-y-1 text-sm">
                         <li
