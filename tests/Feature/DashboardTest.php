@@ -29,7 +29,11 @@ class DashboardTest extends TestCase
         $this->actingAs($user);
 
         $response = $this->get(route('dashboard'));
-        $response->assertOk();
+        $response
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('locale', app()->getLocale()),
+            );
     }
 
     public function test_dashboard_has_questions_false_when_user_subject_has_no_questions()
