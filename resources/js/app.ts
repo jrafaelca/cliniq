@@ -11,6 +11,9 @@ const appLocale = import.meta.env.VITE_APP_LOCALE || 'es';
 const languages = import.meta.glob(
     '../../lang/*.json',
 ) as Record<string, () => Promise<{ default: Record<string, string> }>>;
+const normalizeLocale = (locale: string): string =>
+    locale.replace('_', '-').toLowerCase();
+const i18nLoadTimeoutMs = 1500;
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
@@ -19,19 +22,39 @@ createInertiaApp({
             `./pages/${name}.vue`,
             import.meta.glob<DefineComponent>('./pages/**/*.vue'),
         ),
-    setup({ el, App, props, plugin }) {
-        createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .use(i18nVue, {
+    async setup({ el, App, props, plugin }) {
+        const app = createApp({ render: () => h(App, props) }).use(plugin);
+        const targetLocale = normalizeLocale(appLocale);
+
+        let markI18nReady: (() => void) | undefined;
+        const i18nReady = new Promise<void>((resolve) => {
+            markI18nReady = resolve;
+        });
+
+        app.use(i18nVue, {
                 lang: appLocale,
                 fallbackLang: 'en',
                 fallbackMissingTranslations: true,
+                onLoad: (loadedLocale: string) => {
+                    if (normalizeLocale(loadedLocale) === targetLocale) {
+                        markI18nReady?.();
+                        markI18nReady = undefined;
+                    }
+                },
                 resolve: async (lang: string) =>
                     (await languages[`../../lang/${lang}.json`]?.()) ?? {
                         default: {},
                     },
-            })
-            .mount(el);
+            });
+
+        await Promise.race([
+            i18nReady,
+            new Promise<void>((resolve) =>
+                setTimeout(resolve, i18nLoadTimeoutMs),
+            ),
+        ]);
+
+        app.mount(el);
     },
     progress: {
         color: '#4B5563',
