@@ -109,7 +109,30 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('activeAttemptId', $attempt->id)
-                ->where('activeAttemptRemainingQuestions', 0),
+                ->where('activeAttemptRemainingQuestions', 0)
+                ->where('activeAttemptHasProgress', true)
+                ->where('activeAttemptMode', Attempt::MODE_PRACTICE),
+            );
+    }
+
+    public function test_dashboard_marks_active_attempt_without_answers_as_no_progress(): void
+    {
+        $user = User::factory()->create();
+        $question = Question::factory()->create();
+
+        $attempt = Attempt::factory()->for($user)->create([
+            'status' => Attempt::STATUS_ACTIVE,
+            'question_ids' => [$question->id],
+            'started_at' => now()->subMinutes(3),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('activeAttemptId', $attempt->id)
+                ->where('activeAttemptHasProgress', false)
+                ->where('activeAttemptMode', Attempt::MODE_PRACTICE),
             );
     }
 

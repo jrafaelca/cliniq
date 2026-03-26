@@ -2,25 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Review\StartReviewAttemptRequest;
 use App\Models\Attempt;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 
 class ReviewController extends Controller
 {
     /**
      * Start a new attempt only with incorrect questions.
      */
-    public function start(Request $request): RedirectResponse
+    public function start(StartReviewAttemptRequest $request): RedirectResponse
     {
         $user = $request->user();
-        $activeAttempt = $this->activeAttemptFor($user);
-
-        if ($activeAttempt !== null) {
-            return to_route('practice.show', $activeAttempt);
-        }
+        $shouldRestart = $request->boolean('restart');
 
         $questionIds = $this->incorrectQuestionIdsQuery($user)
             ->inRandomOrder()
@@ -34,9 +30,22 @@ class ReviewController extends Controller
                 ->with('review_error', __('review.no_incorrect_questions'));
         }
 
+        $activeAttempt = $this->activeAttemptFor($user);
+
+        if ($activeAttempt !== null) {
+            if (! $shouldRestart) {
+                return to_route('dashboard')
+                    ->with('review_error', __('review.active_attempt_requires_restart'));
+            }
+
+            $this->expireAttempt($activeAttempt);
+        }
+
         $attempt = Attempt::query()->create([
             'user_id' => $user->id,
             'status' => Attempt::STATUS_ACTIVE,
+            'mode' => Attempt::MODE_REVIEW,
+            'time_limit_seconds' => null,
             'question_ids' => $questionIds,
             'started_at' => now(),
             'last_activity_at' => now(),
@@ -72,5 +81,13 @@ class ReviewController extends Controller
         return $this->incorrectAnswersQuery($user)
             ->select('questions.id')
             ->distinct();
+    }
+
+    private function expireAttempt(Attempt $attempt): void
+    {
+        $attempt->update([
+            'status' => Attempt::STATUS_EXPIRED,
+            'finished_at' => now(),
+        ]);
     }
 }

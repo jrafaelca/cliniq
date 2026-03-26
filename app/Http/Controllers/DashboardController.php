@@ -29,12 +29,14 @@ class DashboardController extends Controller
 
         $latestResult = null;
         $activeAttemptRemainingQuestions = null;
+        $activeAttemptHasProgress = false;
 
         if ($activeAttempt !== null) {
             $answeredCount = $activeAttempt->answers()->count();
             $totalQuestions = count($activeAttempt->question_ids ?? []);
 
             $activeAttemptRemainingQuestions = max(0, $totalQuestions - $answeredCount);
+            $activeAttemptHasProgress = $answeredCount > 0;
         }
 
         if ($latestFinishedAttempt !== null) {
@@ -60,6 +62,8 @@ class DashboardController extends Controller
         return Inertia::render('Dashboard', [
             'activeAttemptId' => $activeAttempt?->id,
             'activeAttemptRemainingQuestions' => $activeAttemptRemainingQuestions,
+            'activeAttemptHasProgress' => $activeAttemptHasProgress,
+            'activeAttemptMode' => $activeAttempt?->mode,
             'hasQuestions' => $questionsQuery->exists(),
             'practiceError' => $request->session()->get('practice_error'),
             'reviewError' => $request->session()->get('review_error'),

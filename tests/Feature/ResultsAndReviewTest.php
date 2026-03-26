@@ -156,6 +156,8 @@ class ResultsAndReviewTest extends TestCase
             ->first();
 
         $this->assertNotNull($newAttempt);
+        $this->assertSame(Attempt::MODE_REVIEW, $newAttempt->mode);
+        $this->assertNull($newAttempt->time_limit_seconds);
         $this->assertCount(12, $newAttempt->question_ids);
         $this->assertEqualsCanonicalizing($questionIds, $newAttempt->question_ids);
         $response->assertRedirect(route('practice.show', $newAttempt));
@@ -218,31 +220,108 @@ class ResultsAndReviewTest extends TestCase
             ->first();
 
         $this->assertNotNull($newAttempt);
+        $this->assertSame(Attempt::MODE_REVIEW, $newAttempt->mode);
+        $this->assertNull($newAttempt->time_limit_seconds);
         $this->assertSame([$medicineQuestion->id], $newAttempt->question_ids);
         $response->assertRedirect(route('practice.show', $newAttempt));
     }
 
-    public function test_review_start_redirects_to_existing_active_attempt()
+    public function test_review_start_requires_restart_flag_when_active_attempt_exists()
     {
+        $subject = Subject::factory()->create();
+        $category = Category::factory()->create([
+            'subject_id' => $subject->id,
+        ]);
         $user = User::factory()->create();
+
+        $incorrectQuestion = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'category_id' => $category->id,
+            'topic_id' => null,
+        ]);
+
+        $finishedAttempt = Attempt::factory()->for($user)->create([
+            'status' => Attempt::STATUS_FINISHED,
+            'question_ids' => [$incorrectQuestion->id],
+            'started_at' => now()->subMinutes(12),
+            'finished_at' => now()->subMinutes(10),
+            'score' => 0,
+        ]);
+
+        AttemptAnswer::factory()->create([
+            'attempt_id' => $finishedAttempt->id,
+            'question_id' => $incorrectQuestion->id,
+            'selected_options' => [],
+            'is_correct' => false,
+        ]);
 
         $activeAttempt = Attempt::factory()->for($user)->create([
             'status' => Attempt::STATUS_ACTIVE,
-            'question_ids' => [],
+            'question_ids' => [$incorrectQuestion->id],
             'started_at' => now()->subMinutes(5),
         ]);
 
         $this->actingAs($user)
             ->post(route('review.start'))
-            ->assertRedirect(route('practice.show', $activeAttempt));
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHas('review_error', __('review.active_attempt_requires_restart'));
 
-        $this->assertCount(
-            1,
-            Attempt::query()
-                ->where('user_id', $user->id)
-                ->where('status', Attempt::STATUS_ACTIVE)
-                ->get(),
-        );
+        $activeAttempt->refresh();
+        $this->assertSame(Attempt::STATUS_ACTIVE, $activeAttempt->status);
+    }
+
+    public function test_review_start_with_restart_flag_expires_active_attempt_and_creates_review_attempt(): void
+    {
+        $subject = Subject::factory()->create();
+        $category = Category::factory()->create([
+            'subject_id' => $subject->id,
+        ]);
+        $user = User::factory()->create();
+
+        $incorrectQuestion = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'category_id' => $category->id,
+            'topic_id' => null,
+        ]);
+
+        $finishedAttempt = Attempt::factory()->for($user)->create([
+            'status' => Attempt::STATUS_FINISHED,
+            'question_ids' => [$incorrectQuestion->id],
+            'started_at' => now()->subMinutes(12),
+            'finished_at' => now()->subMinutes(10),
+            'score' => 0,
+        ]);
+
+        AttemptAnswer::factory()->create([
+            'attempt_id' => $finishedAttempt->id,
+            'question_id' => $incorrectQuestion->id,
+            'selected_options' => [],
+            'is_correct' => false,
+        ]);
+
+        $activeAttempt = Attempt::factory()->for($user)->create([
+            'status' => Attempt::STATUS_ACTIVE,
+            'question_ids' => [$incorrectQuestion->id],
+            'started_at' => now()->subMinutes(2),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('review.start'), [
+            'restart' => 1,
+        ]);
+
+        $activeAttempt->refresh();
+        $this->assertSame(Attempt::STATUS_EXPIRED, $activeAttempt->status);
+
+        $newAttempt = Attempt::query()
+            ->where('user_id', $user->id)
+            ->where('status', Attempt::STATUS_ACTIVE)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($newAttempt);
+        $this->assertSame(Attempt::MODE_REVIEW, $newAttempt->mode);
+        $this->assertSame([$incorrectQuestion->id], $newAttempt->question_ids);
+        $response->assertRedirect(route('practice.show', $newAttempt));
     }
 
     public function test_review_start_redirects_with_error_when_user_has_no_incorrect_questions()

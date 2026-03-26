@@ -1,28 +1,51 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { trans } from 'laravel-vue-i18n';
-import { computed, onMounted, ref } from 'vue';
+import {
+    AlertCircle,
+    BarChart3,
+    Clock3,
+    History,
+    Plus,
+    RefreshCcw,
+    Sparkles,
+    Target,
+    Trophy,
+    ZapIcon,
+} from 'lucide-vue-next';
+import { computed, onMounted, ref, type Component } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
     CardDescription,
-    CardFooter,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     Item,
     ItemActions,
     ItemContent,
     ItemDescription,
+    ItemGroup,
+    ItemHeader,
+    ItemMedia,
     ItemTitle,
 } from '@/components/ui/item';
 import { Progress } from '@/components/ui/progress';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
-import { show, start } from '@/routes/practice';
+import { index as practiceIndex, show } from '@/routes/practice';
 import { stats as dashboardStats } from '@/routes/dashboard';
 import { index as results } from '@/routes/results';
 import { start as startReview } from '@/routes/review';
@@ -51,9 +74,19 @@ type DashboardStats = {
     recent_attempts: RecentAttempt[];
 };
 
+type DashboardIndicator = {
+    id: 'attempts' | 'average' | 'best' | 'time';
+    label: string;
+    value: string;
+    hint: string;
+    icon: Component;
+};
+
 type Props = {
     activeAttemptId: number | null;
     activeAttemptRemainingQuestions: number | null;
+    activeAttemptHasProgress: boolean;
+    activeAttemptMode: 'practice' | 'review' | 'training' | 'simulation' | null;
     hasQuestions: boolean;
     practiceError: string | null;
     reviewError: string | null;
@@ -71,8 +104,22 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 const stats = ref<DashboardStats | null>(null);
 const statsLoading = ref(true);
 const statsError = ref<string | null>(null);
+const isStartingReview = ref(false);
+const isReviewReplaceDialogOpen = ref(false);
 
 const weakestCategory = computed(() => stats.value?.category_performance[0] ?? null);
+
+const activeAttemptModeLabel = computed(() => {
+    if (props.activeAttemptMode === 'training') {
+        return trans('dashboard.session_mode_training');
+    }
+
+    if (props.activeAttemptMode === 'simulation') {
+        return trans('dashboard.session_mode_simulation');
+    }
+
+    return trans('dashboard.session_mode_practice');
+});
 
 const totalTimeLabel = computed(() => {
     const totalMinutes = stats.value?.total_time ?? 0;
@@ -90,16 +137,53 @@ const totalTimeLabel = computed(() => {
     return trans('dashboard.time_minutes', { minutes: String(totalMinutes) });
 });
 
-function scoreBadgeClass(score: number): string {
-    if (score >= 75) {
-        return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+const indicators = computed<DashboardIndicator[]>(() => {
+    if (!stats.value) {
+        return [];
     }
 
-    if (score >= 50) {
-        return 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+    return [
+        {
+            id: 'attempts',
+            label: trans('dashboard.total_attempts'),
+            value: String(stats.value.total_attempts),
+            hint: trans('dashboard.kpi_attempts_hint'),
+            icon: Target,
+        },
+        {
+            id: 'average',
+            label: trans('dashboard.average_score'),
+            value: `${Math.round(stats.value.average_score)}%`,
+            hint: trans('dashboard.kpi_average_hint'),
+            icon: BarChart3,
+        },
+        {
+            id: 'best',
+            label: trans('dashboard.best_score'),
+            value: `${Math.round(stats.value.best_score)}%`,
+            hint: trans('dashboard.kpi_best_hint'),
+            icon: Trophy,
+        },
+        {
+            id: 'time',
+            label: trans('dashboard.total_time'),
+            value: totalTimeLabel.value,
+            hint: trans('dashboard.kpi_total_time_hint'),
+            icon: Clock3,
+        },
+    ];
+});
+
+function scoreBadgeVariant(score: number): 'default' | 'secondary' | 'destructive' {
+    if (score >= 70) {
+        return 'default';
     }
 
-    return 'border-destructive/40 bg-destructive/10 text-destructive';
+    if (score >= 40) {
+        return 'secondary';
+    }
+
+    return 'destructive';
 }
 
 function formatDate(value: string | null): string {
@@ -124,6 +208,42 @@ function formatMinutes(value: number): number {
     }
 
     return Math.ceil(parsedValue);
+}
+
+function startReviewSession(restart: boolean): void {
+    if (isStartingReview.value || (stats.value?.incorrect_count ?? 0) === 0) {
+        return;
+    }
+
+    isStartingReview.value = true;
+
+    const payload: { restart?: 1 } = {};
+
+    if (restart) {
+        payload.restart = 1;
+    }
+
+    router.post(startReview().url, payload, {
+        preserveScroll: true,
+        onFinish: () => {
+            isStartingReview.value = false;
+            isReviewReplaceDialogOpen.value = false;
+        },
+    });
+}
+
+function handleStartReview(): void {
+    if (isStartingReview.value || (stats.value?.incorrect_count ?? 0) === 0) {
+        return;
+    }
+
+    if (props.activeAttemptId === null) {
+        startReviewSession(false);
+
+        return;
+    }
+
+    isReviewReplaceDialogOpen.value = true;
 }
 
 async function loadStats(): Promise<void> {
@@ -160,68 +280,83 @@ onMounted(loadStats);
 <template>
     <Head :title="trans('dashboard.title')" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4">
-            <div class="flex w-full flex-col gap-6">
-                <Item variant="outline">
-                    <ItemContent>
-                        <ItemTitle>{{ trans('dashboard.main_cta_title') }}</ItemTitle>
-                        <ItemDescription v-if="activeAttemptId">
+    <AppLayout
+        :breadcrumbs="breadcrumbs"
+        :page-title="trans('dashboard.title')"
+    >
+        <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
+            <Item variant="outline">
+                <ItemMedia variant="icon">
+                    <ZapIcon />
+                </ItemMedia>
+
+                <ItemContent>
+                    <ItemTitle class="text-lg font-semibold">
+                        {{ trans('dashboard.main_cta_title') }}
+                    </ItemTitle>
+                    <ItemDescription class="line-clamp-none">
+                        <template v-if="activeAttemptId">
                             {{
-                                trans('dashboard.main_cta_active_description', {
+                                trans('dashboard.main_cta_active_description_mode', {
                                     remaining: String(activeAttemptRemainingQuestions ?? 0),
+                                    mode: activeAttemptModeLabel,
                                 })
                             }}
-                        </ItemDescription>
-                        <ItemDescription v-else>
+                        </template>
+                        <template v-else>
                             {{ trans('dashboard.main_cta_idle_description') }}
-                        </ItemDescription>
+                        </template>
+                    </ItemDescription>
 
-                        <p
-                            v-if="practiceError"
-                            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                        >
-                            {{ practiceError }}
-                        </p>
+                    <ItemDescription
+                        v-if="practiceError"
+                        class="line-clamp-none text-destructive"
+                    >
+                        {{ practiceError }}
+                    </ItemDescription>
 
-                        <p
-                            v-if="!hasQuestions"
-                            class="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
-                        >
-                            {{ trans('dashboard.no_questions') }}
-                        </p>
-                    </ItemContent>
+                    <ItemDescription
+                        v-if="!hasQuestions"
+                        class="line-clamp-none"
+                    >
+                        {{ trans('dashboard.no_questions') }}
+                    </ItemDescription>
+                </ItemContent>
 
-                    <ItemActions>
-                        <Button v-if="activeAttemptId" as-child class="w-full sm:w-auto">
-                            <Link :href="show(activeAttemptId)">
-                                {{ trans('dashboard.main_cta_continue') }}
-                            </Link>
-                        </Button>
+                <ItemActions class="ml-auto flex-wrap justify-end">
+                    <Button
+                        as-child
+                        variant="outline"
+                        size="default"
+                        :disabled="!hasQuestions"
+                    >
+                        <Link :href="practiceIndex()">
+                            <Plus class="mr-2 size-4" />
+                            {{
+                                activeAttemptId
+                                    ? trans('dashboard.main_cta_new_session')
+                                    : trans('dashboard.main_cta_pick_session')
+                            }}
+                        </Link>
+                    </Button>
 
-                        <Form
-                            v-else
-                            v-bind="start.form()"
-                            class="w-full sm:w-auto"
-                            v-slot="{ processing }"
-                        >
-                            <Button
-                                type="submit"
-                                class="w-full sm:w-auto"
-                                :disabled="!hasQuestions || processing"
-                            >
-                                {{ trans('dashboard.main_cta_start') }}
-                            </Button>
-                        </Form>
-                    </ItemActions>
-                </Item>
-            </div>
+                    <Button
+                        v-if="activeAttemptId"
+                        as-child
+                        size="default"
+                    >
+                        <Link :href="show(activeAttemptId)">
+                            {{ trans('dashboard.main_cta_continue') }}
+                        </Link>
+                    </Button>
+                </ItemActions>
+            </Item>
 
-            <div v-if="statsLoading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div v-if="statsLoading" class="grid grid-cols-2 gap-4 xl:grid-cols-4">
                 <div
                     v-for="index in 4"
                     :key="index"
-                    class="h-28 animate-pulse rounded-lg border bg-muted/30"
+                    class="h-44 animate-pulse rounded-2xl border bg-muted/40"
                 />
             </div>
 
@@ -233,64 +368,39 @@ onMounted(loadStats);
             </p>
 
             <template v-else-if="stats">
-                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">
-                                {{ trans('dashboard.total_attempts') }}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p class="text-3xl font-semibold">
-                                {{ stats.total_attempts }}
-                            </p>
-                        </CardContent>
-                    </Card>
+                <section>
+                    <ItemGroup class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <Item
+                            v-for="indicator in indicators"
+                            :key="indicator.id"
+                            variant="outline"
+                            class="h-full"
+                        >
+                            <ItemHeader>
+                                <ItemTitle class="text-sm font-medium text-muted-foreground">
+                                    {{ indicator.label }}
+                                </ItemTitle>
+                                <ItemMedia variant="icon">
+                                    <component :is="indicator.icon" />
+                                </ItemMedia>
+                            </ItemHeader>
+                            <ItemContent class="gap-2">
+                                <p class="text-3xl font-semibold tracking-tight tabular-nums">
+                                    {{ indicator.value }}
+                                </p>
+                                <ItemDescription>
+                                    {{ indicator.hint }}
+                                </ItemDescription>
+                            </ItemContent>
+                        </Item>
+                    </ItemGroup>
+                </section>
 
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">
-                                {{ trans('dashboard.average_score') }}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p class="text-3xl font-semibold">
-                                {{ Math.round(stats.average_score) }}%
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">
-                                {{ trans('dashboard.best_score') }}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p class="text-3xl font-semibold">
-                                {{ Math.round(stats.best_score) }}%
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader class="pb-2">
-                            <CardTitle class="text-sm font-medium text-muted-foreground">
-                                {{ trans('dashboard.total_time') }}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p class="text-lg font-semibold">
-                                {{ totalTimeLabel }}
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div class="grid gap-4 xl:grid-cols-5">
-                    <Card class="xl:col-span-3">
+                <section class="grid gap-4 xl:grid-cols-5">
+                    <Card class="rounded-2xl border border-border/70 xl:col-span-3">
                         <CardHeader>
-                            <CardTitle>
+                            <CardTitle class="inline-flex items-center gap-2">
+                                <BarChart3 class="size-5" />
                                 {{ trans('dashboard.category_performance_title') }}
                             </CardTitle>
                             <CardDescription>
@@ -303,59 +413,87 @@ onMounted(loadStats);
                         >
                             {{ trans('dashboard.category_performance_empty') }}
                         </CardContent>
-                        <CardContent v-else class="space-y-4">
-                            <div
-                                v-for="category in stats.category_performance"
-                                :key="category.category_id"
-                                class="space-y-2"
-                            >
-                                <div class="flex items-center justify-between gap-2">
-                                    <p class="text-sm font-medium">{{ category.name }}</p>
-                                    <Badge :class="scoreBadgeClass(category.score)">
-                                        {{ Math.round(category.score) }}%
-                                    </Badge>
-                                </div>
-                                <Progress :model-value="category.score" />
-                            </div>
+                        <CardContent v-else>
+                            <ItemGroup class="gap-3">
+                                <Item
+                                    v-for="category in stats.category_performance"
+                                    :key="category.category_id"
+                                    variant="outline"
+                                    size="sm"
+                                >
+                                    <ItemContent>
+                                        <ItemHeader>
+                                            <ItemTitle>{{ category.name }}</ItemTitle>
+                                            <Badge
+                                                :variant="scoreBadgeVariant(category.score)"
+                                            >
+                                                {{ Math.round(category.score) }}%
+                                            </Badge>
+                                        </ItemHeader>
+                                        <Progress
+                                            :model-value="Math.max(0, Math.min(100, Math.round(category.score)))"
+                                        />
+                                    </ItemContent>
+                                </Item>
+                            </ItemGroup>
                         </CardContent>
                     </Card>
 
-                    <Card class="xl:col-span-2">
+                    <Card class="rounded-2xl border border-border/70 xl:col-span-2">
                         <CardHeader>
-                            <CardTitle>
+                            <CardTitle class="inline-flex items-center gap-2">
+                                <Sparkles class="size-5" />
                                 {{ trans('dashboard.recommendation_title') }}
                             </CardTitle>
                             <CardDescription>
                                 {{ trans('dashboard.recommendation_description') }}
                             </CardDescription>
                         </CardHeader>
-                        <CardContent v-if="weakestCategory" class="space-y-2">
-                            <p class="text-sm text-muted-foreground">
-                                {{ trans('dashboard.recommendation_prefix') }}
-                            </p>
-                            <p class="text-2xl font-semibold">
-                                {{ weakestCategory.name }}
-                            </p>
-                            <Badge :class="scoreBadgeClass(weakestCategory.score)">
-                                {{ Math.round(weakestCategory.score) }}%
-                            </Badge>
+                        <CardContent v-if="weakestCategory" class="space-y-3">
+                            <Item variant="outline" size="sm">
+                                <ItemMedia variant="icon">
+                                    <Target class="size-4" />
+                                </ItemMedia>
+                                <ItemContent>
+                                    <ItemTitle>{{ weakestCategory.name }}</ItemTitle>
+                                    <ItemDescription class="line-clamp-none">
+                                        {{ trans('dashboard.recommendation_prefix') }}
+                                    </ItemDescription>
+                                </ItemContent>
+                                <ItemActions>
+                                    <Badge
+                                        :variant="scoreBadgeVariant(weakestCategory.score)"
+                                    >
+                                        {{ Math.round(weakestCategory.score) }}%
+                                    </Badge>
+                                </ItemActions>
+                            </Item>
+                            <Button as-child variant="outline" size="default" class="w-full">
+                                <Link :href="practiceIndex()">
+                                    <Target class="mr-2 size-4" />
+                                    {{ trans('dashboard.recommendation_button') }}
+                                </Link>
+                            </Button>
                         </CardContent>
                         <CardContent v-else class="text-sm text-muted-foreground">
                             {{ trans('dashboard.recommendation_empty') }}
                         </CardContent>
                     </Card>
-                </div>
+                </section>
 
-                <div class="grid gap-4 xl:grid-cols-5">
-                    <Card class="xl:col-span-3">
-                        <CardHeader class="flex flex-row items-center justify-between gap-4">
+                <section class="grid gap-4 xl:grid-cols-5">
+                    <Card class="rounded-2xl border border-border/70 xl:col-span-3">
+                        <CardHeader class="flex flex-row items-start justify-between gap-4">
                             <div>
-                                <CardTitle>{{ trans('dashboard.recent_attempts_title') }}</CardTitle>
+                                <CardTitle class="inline-flex items-center gap-2">
+                                    <History class="size-5" />
+                                    {{ trans('dashboard.recent_attempts_title') }}
+                                </CardTitle>
                                 <CardDescription>
                                     {{ trans('dashboard.recent_attempts_description') }}
                                 </CardDescription>
                             </div>
-                            <Button variant="secondary" as-child>
+                            <Button variant="outline" size="sm" as-child>
                                 <Link :href="results()">
                                     {{ trans('dashboard.recent_attempts_view_all') }}
                                 </Link>
@@ -367,84 +505,148 @@ onMounted(loadStats);
                         >
                             {{ trans('dashboard.recent_attempts_empty') }}
                         </CardContent>
-                        <CardContent v-else class="space-y-3">
-                            <div
-                                v-for="attempt in stats.recent_attempts"
-                                :key="attempt.id"
-                                class="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                                <div>
-                                    <p class="text-sm font-medium">
-                                        {{
-                                            trans('dashboard.recent_attempt_label', {
-                                                id: String(attempt.id),
-                                            })
-                                        }}
-                                    </p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ formatDate(attempt.created_at) }}
-                                    </p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <Badge :class="scoreBadgeClass(attempt.score)">
-                                        {{ Math.round(attempt.score) }}%
-                                    </Badge>
-                                    <Badge variant="outline">
-                                        {{
-                                            trans('dashboard.recent_attempt_duration', {
-                                                minutes: String(formatMinutes(attempt.duration)),
-                                            })
-                                        }}
-                                    </Badge>
-                                    <Button variant="ghost" as-child>
-                                        <Link :href="show(attempt.id)">
-                                            {{ trans('dashboard.view_detail') }}
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </div>
+                        <CardContent v-else>
+                            <ItemGroup class="gap-3">
+                                <Item
+                                    v-for="attempt in stats.recent_attempts"
+                                    :key="attempt.id"
+                                    variant="outline"
+                                    size="sm"
+                                >
+                                    <ItemMedia variant="icon">
+                                        <History class="size-4" />
+                                    </ItemMedia>
+                                    <ItemContent>
+                                        <ItemTitle>
+                                            {{
+                                                trans('dashboard.recent_attempt_label', {
+                                                    id: String(attempt.id),
+                                                })
+                                            }}
+                                        </ItemTitle>
+                                        <ItemDescription>
+                                            {{ formatDate(attempt.created_at) }}
+                                        </ItemDescription>
+                                    </ItemContent>
+                                    <ItemActions class="flex-wrap">
+                                        <Badge
+                                            :variant="scoreBadgeVariant(attempt.score)"
+                                        >
+                                            {{ Math.round(attempt.score) }}%
+                                        </Badge>
+                                        <Badge variant="outline">
+                                            {{
+                                                trans('dashboard.recent_attempt_duration', {
+                                                    minutes: String(formatMinutes(attempt.duration)),
+                                                })
+                                            }}
+                                        </Badge>
+                                        <Button variant="ghost" size="sm" as-child>
+                                            <Link :href="show(attempt.id)">
+                                                {{ trans('dashboard.view_detail') }}
+                                            </Link>
+                                        </Button>
+                                    </ItemActions>
+                                </Item>
+                            </ItemGroup>
                         </CardContent>
                     </Card>
 
-                    <Card class="xl:col-span-2">
+                    <Card class="rounded-2xl border border-border/70 xl:col-span-2">
                         <CardHeader>
-                            <CardTitle>{{ trans('dashboard.review_title') }}</CardTitle>
+                            <CardTitle class="inline-flex items-center gap-2">
+                                <AlertCircle class="size-5" />
+                                {{ trans('dashboard.review_title') }}
+                            </CardTitle>
                             <CardDescription>
                                 {{ trans('dashboard.review_description') }}
                             </CardDescription>
                         </CardHeader>
-                        <CardContent class="space-y-2">
-                            <p class="text-sm text-muted-foreground">
-                                {{ trans('dashboard.review_prefix') }}
-                            </p>
-                            <p class="text-3xl font-semibold">
-                                {{ stats.incorrect_count }}
-                            </p>
+                        <CardContent class="space-y-3">
+                            <Item variant="outline" size="sm">
+                                <ItemMedia variant="icon">
+                                    <AlertCircle class="size-4" />
+                                </ItemMedia>
+                                <ItemContent class="gap-1.5">
+                                    <ItemDescription class="line-clamp-none">
+                                        {{ trans('dashboard.review_prefix') }}
+                                    </ItemDescription>
+                                    <ItemDescription class="line-clamp-none">
+                                        {{ trans('dashboard.review_questions_suffix') }}
+                                    </ItemDescription>
+                                </ItemContent>
+                                <ItemActions class="ml-auto flex-col items-end gap-0">
+                                    <p class="text-2xl font-semibold tracking-tight tabular-nums">
+                                        {{ stats.incorrect_count }}
+                                    </p>
+                                    <ItemDescription class="line-clamp-none">
+                                        {{ trans('dashboard.review_questions_label') }}
+                                    </ItemDescription>
+                                </ItemActions>
+                            </Item>
+
                             <p
                                 v-if="reviewError"
                                 class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
                             >
                                 {{ reviewError }}
                             </p>
+
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="default"
+                                class="w-full"
+                                :disabled="isStartingReview || stats.incorrect_count === 0"
+                                @click="handleStartReview"
+                            >
+                                <RefreshCcw class="mr-2 size-4" />
+                                {{
+                                    isStartingReview
+                                        ? trans('dashboard.review_button_loading')
+                                        : trans('dashboard.review_button')
+                                }}
+                            </Button>
                         </CardContent>
-                        <CardFooter>
-                            <Form v-bind="startReview.form()" class="w-full sm:w-auto" v-slot="{ processing }">
-                                <Button
-                                    type="submit"
-                                    class="w-full sm:w-auto"
-                                    :disabled="processing || stats.incorrect_count === 0"
-                                >
-                                    {{
-                                        processing
-                                            ? trans('dashboard.review_button_loading')
-                                            : trans('dashboard.review_button')
-                                    }}
-                                </Button>
-                            </Form>
-                        </CardFooter>
                     </Card>
-                </div>
+                </section>
             </template>
         </div>
+
+        <Dialog
+            :open="isReviewReplaceDialogOpen"
+            @update:open="isReviewReplaceDialogOpen = $event"
+        >
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>
+                        {{ trans('dashboard.review_replace_confirm_title') }}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {{
+                            trans('dashboard.review_replace_confirm_description', {
+                                remaining: String(activeAttemptRemainingQuestions ?? 0),
+                            })
+                        }}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <DialogFooter class="gap-2">
+                    <DialogClose as-child>
+                        <Button variant="secondary" :disabled="isStartingReview">
+                            {{ trans('dashboard.review_replace_cancel') }}
+                        </Button>
+                    </DialogClose>
+
+                    <Button
+                        type="button"
+                        :disabled="isStartingReview"
+                        @click="startReviewSession(true)"
+                    >
+                        {{ trans('dashboard.review_replace_confirm') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </AppLayout>
 </template>

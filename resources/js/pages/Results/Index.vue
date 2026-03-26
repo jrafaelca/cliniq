@@ -7,9 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
 } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
@@ -96,26 +93,19 @@ function formatMinutes(value: number): number {
 <template>
     <Head :title="trans('results.head_title')" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4">
+    <AppLayout
+        :breadcrumbs="breadcrumbs"
+        :page-title="trans('results.title')"
+    >
+        <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
             <Card>
-                <CardHeader>
-                    <CardTitle>{{ trans('results.title') }}</CardTitle>
-                    <CardDescription>
-                        {{
-                            trans('results.subtitle', {
-                                total: String(results.meta.total),
-                            })
-                        }}
-                    </CardDescription>
-                </CardHeader>
                 <CardContent
                     v-if="results.data.length === 0"
-                    class="text-sm text-muted-foreground"
+                    class="pt-6 text-sm text-muted-foreground"
                 >
                     {{ trans('results.empty') }}
                 </CardContent>
-                <CardContent v-else class="space-y-3">
+                <CardContent v-else class="space-y-3 pt-6">
                     <div
                         v-for="attempt in results.data"
                         :key="attempt.id"

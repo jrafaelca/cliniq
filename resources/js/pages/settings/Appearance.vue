@@ -23,15 +23,17 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
 
         <h1 class="sr-only">{{ trans('settings.appearance_sr_title') }}</h1>
 
-        <SettingsLayout>
-            <div class="space-y-6">
-                <Heading
-                    variant="small"
-                    :title="trans('settings.appearance_title')"
-                    :description="trans('settings.appearance_description')"
-                />
-                <AppearanceTabs />
-            </div>
-        </SettingsLayout>
+        <div class="mx-auto w-full max-w-5xl">
+            <SettingsLayout>
+                <div class="space-y-6">
+                    <Heading
+                        variant="small"
+                        :title="trans('settings.appearance_title')"
+                        :description="trans('settings.appearance_description')"
+                    />
+                    <AppearanceTabs />
+                </div>
+            </SettingsLayout>
+        </div>
     </AppLayout>
 </template>

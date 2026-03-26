@@ -21,6 +21,8 @@ class AttemptFactory extends Factory
         return [
             'user_id' => User::factory(),
             'status' => Attempt::STATUS_ACTIVE,
+            'mode' => Attempt::MODE_PRACTICE,
+            'time_limit_seconds' => null,
             'question_ids' => [],
             'started_at' => now(),
             'last_activity_at' => now(),
@@ -35,6 +37,13 @@ class AttemptFactory extends Factory
             'status' => Attempt::STATUS_FINISHED,
             'finished_at' => now(),
             'score' => $score ?? fake()->randomFloat(2, 0, 100),
+        ]);
+    }
+
+    public function review(): static
+    {
+        return $this->state(fn () => [
+            'mode' => Attempt::MODE_REVIEW,
         ]);
     }
 }

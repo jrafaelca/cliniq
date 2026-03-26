@@ -30,6 +30,9 @@ class PracticeFlowTest extends TestCase
         $question = $this->createSingleQuestion();
         $attempt = $this->createActiveAttempt($owner, [$question->id]);
 
+        $this->get(route('practice.index'))
+            ->assertRedirect(route('login'));
+
         $this->post(route('practice.start'))
             ->assertRedirect(route('login'));
 
@@ -46,6 +49,49 @@ class PracticeFlowTest extends TestCase
             ->assertRedirect(route('login'));
     }
 
+    public function test_index_shows_entry_page_when_user_has_no_active_attempt(): void
+    {
+        $user = User::factory()->create();
+        $this->createSingleQuestion();
+
+        $this->actingAs($user)
+            ->get(route('practice.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Entry')
+                ->where('activeAttemptId', null)
+                ->where('remainingQuestions', null)
+                ->where('hasQuestions', true),
+            );
+    }
+
+    public function test_index_shows_continue_or_start_new_choices_when_attempt_is_active(): void
+    {
+        $user = User::factory()->create();
+        $firstQuestion = $this->createSingleQuestion();
+        $secondQuestion = $this->createSingleQuestion();
+        $correctOptionId = $firstQuestion->options->firstWhere('is_correct', true)->id;
+
+        $attempt = $this->createActiveAttempt($user, [$firstQuestion->id, $secondQuestion->id]);
+
+        AttemptAnswer::query()->create([
+            'attempt_id' => $attempt->id,
+            'question_id' => $firstQuestion->id,
+            'selected_options' => [$correctOptionId],
+            'is_correct' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Entry')
+                ->where('activeAttemptId', $attempt->id)
+                ->where('remainingQuestions', 1)
+                ->where('hasQuestions', true),
+            );
+    }
+
     public function test_start_creates_attempt_with_random_questions()
     {
         $user = User::factory()->create();
@@ -60,10 +106,65 @@ class PracticeFlowTest extends TestCase
 
         $this->assertNotNull($attempt);
         $this->assertSame(Attempt::STATUS_ACTIVE, $attempt->status);
+        $this->assertSame(Attempt::MODE_PRACTICE, $attempt->mode);
+        $this->assertNull($attempt->time_limit_seconds);
         $this->assertNotNull($attempt->started_at);
         $this->assertCount(10, $attempt->question_ids);
 
         $response->assertRedirect(route('practice.show', $attempt));
+    }
+
+    public function test_start_accepts_training_mode_without_time_limit(): void
+    {
+        $user = User::factory()->create();
+
+        for ($index = 0; $index < 12; $index++) {
+            $this->createSingleQuestion();
+        }
+
+        $response = $this->actingAs($user)->post(route('practice.start'), [
+            'mode' => Attempt::MODE_TRAINING,
+        ]);
+
+        $attempt = Attempt::query()->first();
+
+        $this->assertNotNull($attempt);
+        $this->assertSame(Attempt::MODE_TRAINING, $attempt->mode);
+        $this->assertNull($attempt->time_limit_seconds);
+        $response->assertRedirect(route('practice.show', $attempt));
+    }
+
+    public function test_start_accepts_simulation_mode_with_time_limit(): void
+    {
+        $user = User::factory()->create();
+
+        for ($index = 0; $index < 12; $index++) {
+            $this->createSingleQuestion();
+        }
+
+        $response = $this->actingAs($user)->post(route('practice.start'), [
+            'mode' => Attempt::MODE_SIMULATION,
+        ]);
+
+        $attempt = Attempt::query()->first();
+
+        $this->assertNotNull($attempt);
+        $this->assertSame(Attempt::MODE_SIMULATION, $attempt->mode);
+        $this->assertSame(Attempt::SIMULATION_TIME_LIMIT_SECONDS, $attempt->time_limit_seconds);
+        $response->assertRedirect(route('practice.show', $attempt));
+    }
+
+    public function test_start_rejects_invalid_mode(): void
+    {
+        $user = User::factory()->create();
+        $this->createSingleQuestion();
+
+        $this->actingAs($user)
+            ->post(route('practice.start'), [
+                'mode' => 'invalid-mode',
+            ])
+            ->assertStatus(302)
+            ->assertSessionHasErrors('mode');
     }
 
     public function test_start_resumes_active_attempt_if_exists()
@@ -154,11 +255,66 @@ class PracticeFlowTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Practice/Question')
                 ->where('attemptId', $attempt->id)
+                ->where('attempt_mode', Attempt::MODE_PRACTICE)
+                ->where('settings.auto_advance', true)
+                ->where('settings.auto_advance_delay', 5)
                 ->where('question.id', $secondQuestion->id)
                 ->where('progress.current', 2)
                 ->where('progress.total', 2)
                 ->where('progress.percent', 50),
             );
+    }
+
+    public function test_show_includes_attempt_time_limit_for_simulation_mode(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+
+        $attempt = Attempt::factory()
+            ->for($user)
+            ->create([
+                'status' => Attempt::STATUS_ACTIVE,
+                'mode' => Attempt::MODE_SIMULATION,
+                'time_limit_seconds' => Attempt::SIMULATION_TIME_LIMIT_SECONDS,
+                'question_ids' => [$question->id],
+            ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.show', $attempt))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Question')
+                ->where('attemptId', $attempt->id)
+                ->where('attempt_mode', Attempt::MODE_SIMULATION)
+                ->where('attempt_time_limit_seconds', Attempt::SIMULATION_TIME_LIMIT_SECONDS),
+            );
+    }
+
+    public function test_show_finishes_simulation_when_time_limit_is_exceeded(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+
+        $attempt = Attempt::factory()
+            ->for($user)
+            ->create([
+                'status' => Attempt::STATUS_ACTIVE,
+                'mode' => Attempt::MODE_SIMULATION,
+                'time_limit_seconds' => Attempt::SIMULATION_TIME_LIMIT_SECONDS,
+                'question_ids' => [$question->id],
+                'started_at' => now()->subSeconds(Attempt::SIMULATION_TIME_LIMIT_SECONDS + 5),
+            ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.show', $attempt))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Result')
+                ->where('attemptId', $attempt->id),
+            );
+
+        $attempt->refresh();
+        $this->assertSame(Attempt::STATUS_FINISHED, $attempt->status);
     }
 
     public function test_show_returns_result_view_when_attempt_is_finished()
@@ -189,7 +345,46 @@ class PracticeFlowTest extends TestCase
                 ->where('attemptId', $attempt->id)
                 ->where('correct_count', 1)
                 ->where('incorrect_count', 0)
-                ->where('total_questions', 1),
+                ->where('total_questions', 1)
+                ->has('question_feedback', 1)
+                ->where('question_feedback.0.question_id', $question->id)
+                ->where('question_feedback.0.is_answered', true)
+                ->where('question_feedback.0.is_correct', true),
+            );
+    }
+
+    public function test_finished_result_includes_unanswered_feedback_entries(): void
+    {
+        $user = User::factory()->create();
+        $firstQuestion = $this->createSingleQuestion();
+        $secondQuestion = $this->createSingleQuestion();
+        $correctOptionId = $firstQuestion->options->firstWhere('is_correct', true)->id;
+
+        $attempt = Attempt::factory()
+            ->for($user)
+            ->finished(50)
+            ->create([
+                'question_ids' => [$firstQuestion->id, $secondQuestion->id],
+            ]);
+
+        AttemptAnswer::query()->create([
+            'attempt_id' => $attempt->id,
+            'question_id' => $firstQuestion->id,
+            'selected_options' => [$correctOptionId],
+            'is_correct' => true,
+            'time_spent_seconds' => 30,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.show', $attempt))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Result')
+                ->has('question_feedback', 2)
+                ->where('question_feedback.0.question_id', $firstQuestion->id)
+                ->where('question_feedback.0.is_answered', true)
+                ->where('question_feedback.1.question_id', $secondQuestion->id)
+                ->where('question_feedback.1.is_answered', false),
             );
     }
 
@@ -360,6 +555,35 @@ class PracticeFlowTest extends TestCase
         ]);
     }
 
+    public function test_answer_rejects_simulation_when_time_limit_is_exceeded(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+        $correctOptionId = $question->options->firstWhere('is_correct', true)->id;
+
+        $attempt = Attempt::factory()
+            ->for($user)
+            ->create([
+                'status' => Attempt::STATUS_ACTIVE,
+                'mode' => Attempt::MODE_SIMULATION,
+                'time_limit_seconds' => Attempt::SIMULATION_TIME_LIMIT_SECONDS,
+                'question_ids' => [$question->id],
+                'started_at' => now()->subSeconds(Attempt::SIMULATION_TIME_LIMIT_SECONDS + 5),
+            ]);
+
+        $this->actingAs($user)
+            ->postJson(route('practice.answer', $attempt), [
+                'question_id' => $question->id,
+                'selected_options' => [$correctOptionId],
+                'time_spent_seconds' => 10,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['attempt']);
+
+        $attempt->refresh();
+        $this->assertSame(Attempt::STATUS_FINISHED, $attempt->status);
+    }
+
     public function test_answer_defaults_time_spent_seconds_when_not_sent(): void
     {
         $user = User::factory()->create();
@@ -415,6 +639,7 @@ class PracticeFlowTest extends TestCase
 
         $response = $this->actingAs($user)->post(route('practice.start'), [
             'restart' => 1,
+            'mode' => Attempt::MODE_SIMULATION,
         ]);
 
         $existingAttempt->refresh();
@@ -428,6 +653,8 @@ class PracticeFlowTest extends TestCase
 
         $this->assertNotNull($newAttempt);
         $this->assertNotSame($existingAttempt->id, $newAttempt->id);
+        $this->assertSame(Attempt::MODE_SIMULATION, $newAttempt->mode);
+        $this->assertSame(Attempt::SIMULATION_TIME_LIMIT_SECONDS, $newAttempt->time_limit_seconds);
         $this->assertNotNull($newAttempt->last_activity_at);
         $response->assertRedirect(route('practice.show', $newAttempt));
     }

@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'user_id',
     'status',
+    'mode',
+    'time_limit_seconds',
     'question_ids',
     'started_at',
     'last_activity_at',
@@ -29,6 +31,16 @@ class Attempt extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    public const MODE_PRACTICE = 'practice';
+
+    public const MODE_REVIEW = 'review';
+
+    public const MODE_TRAINING = 'training';
+
+    public const MODE_SIMULATION = 'simulation';
+
+    public const SIMULATION_TIME_LIMIT_SECONDS = 120;
+
     public const INACTIVITY_LIMIT_MINUTES = 30;
 
     /**
@@ -40,6 +52,8 @@ class Attempt extends Model
     {
         return [
             'question_ids' => 'array',
+            'mode' => 'string',
+            'time_limit_seconds' => 'integer',
             'started_at' => 'datetime',
             'last_activity_at' => 'datetime',
             'finished_at' => 'datetime',

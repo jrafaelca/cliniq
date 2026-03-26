@@ -24,6 +24,16 @@ type Props = {
     total_questions: number;
     total_time_seconds: number;
     average_time_per_question_seconds: number;
+    question_feedback: Array<{
+        question_id: number;
+        statement: string;
+        is_answered: boolean;
+        is_correct: boolean | null;
+        selected_option_texts: string[];
+        correct_option_texts: string[];
+        explanation: string | null;
+        time_spent_seconds: number;
+    }>;
 };
 
 const props = defineProps<Props>();
@@ -84,13 +94,25 @@ const averageTimePerQuestionInSeconds = computed(() => {
 
     return Math.ceil(averageSeconds);
 });
+
+function feedbackCardClass(isAnswered: boolean, isCorrect: boolean | null): string {
+    if (!isAnswered) {
+        return 'border-border bg-muted/20';
+    }
+
+    if (isCorrect) {
+        return 'border-emerald-500/40 bg-emerald-500/5';
+    }
+
+    return 'border-destructive/40 bg-destructive/5';
+}
 </script>
 
 <template>
     <Head :title="trans('result.head_title')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4">
+        <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
             <Card>
                 <CardHeader>
                     <CardTitle class="text-2xl">{{
@@ -144,6 +166,94 @@ const averageTimePerQuestionInSeconds = computed(() => {
                         }}
                     </p>
                 </CardFooter>
+            </Card>
+
+            <Card v-if="question_feedback.length > 0">
+                <CardHeader>
+                    <CardTitle>{{ trans('result.feedback_title') }}</CardTitle>
+                    <CardDescription>{{ trans('result.feedback_description') }}</CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-3">
+                    <div
+                        v-for="(feedbackItem, index) in question_feedback"
+                        :key="feedbackItem.question_id"
+                        class="rounded-md border p-3"
+                        :class="
+                            feedbackCardClass(
+                                feedbackItem.is_answered,
+                                feedbackItem.is_correct,
+                            )
+                        "
+                    >
+                        <p class="text-xs uppercase text-muted-foreground">
+                            {{
+                                trans('result.feedback_question_label', {
+                                    number: String(index + 1),
+                                })
+                            }}
+                        </p>
+                        <p class="mt-1 text-sm font-medium">
+                            {{ feedbackItem.statement }}
+                        </p>
+
+                        <p class="mt-2 text-sm text-muted-foreground">
+                            {{
+                                feedbackItem.is_answered
+                                    ? feedbackItem.is_correct
+                                        ? trans('result.feedback_status_correct')
+                                        : trans('result.feedback_status_incorrect')
+                                    : trans('result.feedback_status_unanswered')
+                            }}
+                        </p>
+
+                        <div class="mt-3 space-y-2 text-sm">
+                            <p class="font-medium text-muted-foreground">
+                                {{ trans('result.feedback_your_answer') }}
+                            </p>
+                            <ul
+                                v-if="feedbackItem.selected_option_texts.length > 0"
+                                class="space-y-1"
+                            >
+                                <li
+                                    v-for="text in feedbackItem.selected_option_texts"
+                                    :key="`${feedbackItem.question_id}-selected-${text}`"
+                                    class="rounded bg-background/80 px-2 py-1"
+                                >
+                                    {{ text }}
+                                </li>
+                            </ul>
+                            <p v-else class="text-muted-foreground">
+                                {{ trans('result.feedback_no_answer') }}
+                            </p>
+
+                            <p class="font-medium text-muted-foreground">
+                                {{ trans('result.feedback_correct_answer') }}
+                            </p>
+                            <ul
+                                v-if="feedbackItem.correct_option_texts.length > 0"
+                                class="space-y-1"
+                            >
+                                <li
+                                    v-for="text in feedbackItem.correct_option_texts"
+                                    :key="`${feedbackItem.question_id}-correct-${text}`"
+                                    class="rounded bg-background/80 px-2 py-1"
+                                >
+                                    {{ text }}
+                                </li>
+                            </ul>
+                            <p v-else class="text-muted-foreground">
+                                {{ trans('result.feedback_not_available') }}
+                            </p>
+
+                            <p
+                                v-if="feedbackItem.explanation"
+                                class="text-muted-foreground"
+                            >
+                                {{ feedbackItem.explanation }}
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
             </Card>
 
             <div class="flex flex-wrap gap-3">

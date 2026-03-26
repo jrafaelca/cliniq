@@ -41,7 +41,7 @@ const continuePracticeHref = computed(() => {
     <Head :title="trans('practice.head_title')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4">
+        <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
             <Card>
                 <CardHeader>
                     <CardTitle>

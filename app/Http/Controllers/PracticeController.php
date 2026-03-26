@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Practice\AnswerQuestionRequest;
+use App\Http\Requests\Practice\StartPracticeAttemptRequest;
 use App\Models\Attempt;
 use App\Models\AttemptAnswer;
 use App\Models\Question;
+use App\Models\User;
+use App\Models\UserSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -17,28 +20,56 @@ class PracticeController extends Controller
     /**
      * Resolve the practice landing action from navigation.
      */
-    public function index(Request $request): RedirectResponse
+    public function index(Request $request): Response|RedirectResponse
     {
-        $activeAttempt = $request->user()
+        $user = $request->user();
+
+        $activeAttempt = $user
             ->attempts()
             ->where('status', Attempt::STATUS_ACTIVE)
             ->latest('started_at')
             ->first();
 
+        $remainingQuestions = null;
+        $activeAttemptMode = null;
+        $activeAttemptProgressPercent = null;
+        $activeAttemptLastActivityAt = null;
+
         if ($activeAttempt !== null) {
-            return to_route('practice.show', $activeAttempt);
+            $answeredCount = $activeAttempt->answers()->count();
+            $totalQuestions = count($activeAttempt->question_ids ?? []);
+            $remainingQuestions = max(0, $totalQuestions - $answeredCount);
+            $activeAttemptMode = $activeAttempt->mode ?? Attempt::MODE_PRACTICE;
+            $activeAttemptProgressPercent = $totalQuestions > 0
+                ? round(($answeredCount / $totalQuestions) * 100, 2)
+                : 0;
+            $activeAttemptLastActivityAt = $activeAttempt->last_activity_at?->toIso8601String();
         }
 
-        return to_route('dashboard');
+        $questionsQuery = Question::query();
+
+        if ($user->subject_id !== null) {
+            $questionsQuery->where('subject_id', $user->subject_id);
+        }
+
+        return Inertia::render('Practice/Entry', [
+            'activeAttemptId' => $activeAttempt?->id,
+            'remainingQuestions' => $remainingQuestions,
+            'activeAttemptMode' => $activeAttemptMode,
+            'activeAttemptProgressPercent' => $activeAttemptProgressPercent,
+            'activeAttemptLastActivityAt' => $activeAttemptLastActivityAt,
+            'hasQuestions' => $questionsQuery->exists(),
+        ]);
     }
 
     /**
      * Start a new practice attempt or resume the active one.
      */
-    public function start(Request $request): RedirectResponse
+    public function start(StartPracticeAttemptRequest $request): RedirectResponse
     {
         $user = $request->user();
         $shouldRestart = $request->boolean('restart');
+        $mode = (string) ($request->validated('mode') ?? Attempt::MODE_PRACTICE);
 
         $activeAttempt = $user->attempts()
             ->where('status', Attempt::STATUS_ACTIVE)
@@ -47,6 +78,10 @@ class PracticeController extends Controller
 
         if ($activeAttempt !== null) {
             if ($shouldRestart) {
+                if (! $request->has('mode')) {
+                    $mode = (string) ($activeAttempt->mode ?? Attempt::MODE_PRACTICE);
+                }
+
                 $this->expireAttempt($activeAttempt);
             } else {
                 return to_route('practice.show', $activeAttempt);
@@ -77,6 +112,8 @@ class PracticeController extends Controller
         $attempt = Attempt::query()->create([
             'user_id' => $user->id,
             'status' => Attempt::STATUS_ACTIVE,
+            'mode' => $mode,
+            'time_limit_seconds' => $this->resolveTimeLimitForMode($mode),
             'question_ids' => $questionIds,
             'started_at' => now(),
             'last_activity_at' => now(),
@@ -101,6 +138,12 @@ class PracticeController extends Controller
                 'practice_error',
                 __('practice.session_expired'),
             );
+        }
+
+        if ($this->hasExceededSimulationTimeLimit($attempt)) {
+            $this->finishAttempt($attempt);
+
+            return Inertia::render('Practice/Result', $this->buildResultProps($attempt->fresh()));
         }
 
         if ($this->hasExceededInactivityLimit($attempt) && ! $request->boolean('resume')) {
@@ -139,6 +182,10 @@ class PracticeController extends Controller
 
         return Inertia::render('Practice/Question', [
             'attemptId' => $attempt->id,
+            'attempt_mode' => $attempt->mode ?? Attempt::MODE_PRACTICE,
+            'attempt_time_limit_seconds' => $attempt->time_limit_seconds,
+            'attempt_started_at' => $attempt->started_at,
+            'settings' => $this->resolvePracticeSettings($request->user()),
             'question' => [
                 'id' => $question->id,
                 'statement' => $question->statement,
@@ -168,6 +215,14 @@ class PracticeController extends Controller
         if ($attempt->status !== Attempt::STATUS_ACTIVE) {
             throw ValidationException::withMessages([
                 'attempt' => 'Este intento ya fue finalizado.',
+            ]);
+        }
+
+        if ($this->hasExceededSimulationTimeLimit($attempt)) {
+            $this->finishAttempt($attempt);
+
+            throw ValidationException::withMessages([
+                'attempt' => __('practice.simulation_time_expired'),
             ]);
         }
 
@@ -300,10 +355,60 @@ class PracticeController extends Controller
      */
     private function buildResultProps(Attempt $attempt): array
     {
-        $totalQuestions = count($attempt->question_ids ?? []);
+        $questionIds = collect($attempt->question_ids ?? [])
+            ->map(fn (mixed $id): int => (int) $id)
+            ->values();
+
+        $totalQuestions = $questionIds->count();
         $correctCount = $attempt->answers()->where('is_correct', true)->count();
         $incorrectCount = max(0, $totalQuestions - $correctCount);
         $totalTimeSeconds = (int) $attempt->answers()->sum('time_spent_seconds');
+        $questionsById = Question::query()
+            ->with('options')
+            ->whereIn('id', $questionIds->all())
+            ->get()
+            ->keyBy('id');
+        $answersByQuestionId = $attempt->answers()
+            ->get()
+            ->keyBy('question_id');
+        $questionFeedback = $questionIds
+            ->map(function (int $questionId) use ($questionsById, $answersByQuestionId): ?array {
+                $question = $questionsById->get($questionId);
+
+                if ($question === null) {
+                    return null;
+                }
+
+                $answer = $answersByQuestionId->get($questionId);
+                $selectedOptionIds = collect($answer?->selected_options ?? [])
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->values();
+                $optionsById = $question->options->keyBy('id');
+                $selectedOptionTexts = $selectedOptionIds
+                    ->map(fn (int $optionId): ?string => $optionsById->get($optionId)?->text)
+                    ->filter(fn (?string $text): bool => is_string($text) && $text !== '')
+                    ->values()
+                    ->all();
+                $correctOptionTexts = $question->options
+                    ->where('is_correct', true)
+                    ->pluck('text')
+                    ->values()
+                    ->all();
+
+                return [
+                    'question_id' => $question->id,
+                    'statement' => $question->statement,
+                    'is_answered' => $answer !== null,
+                    'is_correct' => $answer?->is_correct,
+                    'selected_option_texts' => $selectedOptionTexts,
+                    'correct_option_texts' => $correctOptionTexts,
+                    'explanation' => $question->explanation,
+                    'time_spent_seconds' => (int) ($answer?->time_spent_seconds ?? 0),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
 
         return [
             'attemptId' => $attempt->id,
@@ -311,6 +416,7 @@ class PracticeController extends Controller
             'correct_count' => $correctCount,
             'incorrect_count' => $incorrectCount,
             'total_questions' => $totalQuestions,
+            'question_feedback' => $questionFeedback,
             // Keep compatibility with already-cached frontend bundles.
             'started_at' => $attempt->started_at,
             'finished_at' => $attempt->finished_at,
@@ -348,6 +454,21 @@ class PracticeController extends Controller
             ->lt(now()->subMinutes(Attempt::INACTIVITY_LIMIT_MINUTES));
     }
 
+    private function hasExceededSimulationTimeLimit(Attempt $attempt): bool
+    {
+        if ($attempt->mode !== Attempt::MODE_SIMULATION) {
+            return false;
+        }
+
+        if ($attempt->time_limit_seconds === null || $attempt->started_at === null) {
+            return false;
+        }
+
+        return $attempt->started_at
+            ->addSeconds((int) $attempt->time_limit_seconds)
+            ->lte(now());
+    }
+
     private function markAttemptActivity(Attempt $attempt): void
     {
         $attempt->update([
@@ -361,5 +482,28 @@ class PracticeController extends Controller
             'status' => Attempt::STATUS_EXPIRED,
             'finished_at' => now(),
         ]);
+    }
+
+    private function resolveTimeLimitForMode(string $mode): ?int
+    {
+        if ($mode === Attempt::MODE_SIMULATION) {
+            return Attempt::SIMULATION_TIME_LIMIT_SECONDS;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{auto_advance: bool, auto_advance_delay: int}
+     */
+    private function resolvePracticeSettings(User $user): array
+    {
+        $settings = $user->settings()->firstOrCreate([], [
+            'preferences' => UserSettings::defaultPreferences(),
+        ]);
+
+        return UserSettings::normalizePreferences(
+            is_array($settings->preferences) ? $settings->preferences : null,
+        );
     }
 }
