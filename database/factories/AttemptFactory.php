@@ -23,6 +23,7 @@ class AttemptFactory extends Factory
             'status' => Attempt::STATUS_ACTIVE,
             'question_ids' => [],
             'started_at' => now(),
+            'last_activity_at' => now(),
             'finished_at' => null,
             'score' => null,
         ];

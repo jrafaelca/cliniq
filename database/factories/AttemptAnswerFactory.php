@@ -24,6 +24,7 @@ class AttemptAnswerFactory extends Factory
             'question_id' => Question::factory(),
             'selected_options' => [],
             'is_correct' => false,
+            'time_spent_seconds' => 0,
         ];
     }
 }

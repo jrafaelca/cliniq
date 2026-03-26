@@ -38,6 +38,7 @@ class PracticeController extends Controller
     public function start(Request $request): RedirectResponse
     {
         $user = $request->user();
+        $shouldRestart = $request->boolean('restart');
 
         $activeAttempt = $user->attempts()
             ->where('status', Attempt::STATUS_ACTIVE)
@@ -45,7 +46,11 @@ class PracticeController extends Controller
             ->first();
 
         if ($activeAttempt !== null) {
-            return to_route('practice.show', $activeAttempt);
+            if ($shouldRestart) {
+                $this->expireAttempt($activeAttempt);
+            } else {
+                return to_route('practice.show', $activeAttempt);
+            }
         }
 
         $questionsQuery = Question::query();
@@ -74,6 +79,7 @@ class PracticeController extends Controller
             'status' => Attempt::STATUS_ACTIVE,
             'question_ids' => $questionIds,
             'started_at' => now(),
+            'last_activity_at' => now(),
         ]);
 
         return to_route('practice.show', $attempt);
@@ -89,6 +95,22 @@ class PracticeController extends Controller
         if ($attempt->status === Attempt::STATUS_FINISHED) {
             return Inertia::render('Practice/Result', $this->buildResultProps($attempt));
         }
+
+        if ($attempt->status === Attempt::STATUS_EXPIRED) {
+            return to_route('dashboard')->with(
+                'practice_error',
+                __('practice.session_expired'),
+            );
+        }
+
+        if ($this->hasExceededInactivityLimit($attempt) && ! $request->boolean('resume')) {
+            return Inertia::render('Practice/Paused', [
+                'attemptId' => $attempt->id,
+                'inactivity_limit_minutes' => Attempt::INACTIVITY_LIMIT_MINUTES,
+            ]);
+        }
+
+        $this->markAttemptActivity($attempt);
 
         $questionIds = collect($attempt->question_ids ?? [])
             ->map(fn (mixed $id): int => (int) $id)
@@ -146,6 +168,12 @@ class PracticeController extends Controller
         if ($attempt->status !== Attempt::STATUS_ACTIVE) {
             throw ValidationException::withMessages([
                 'attempt' => 'Este intento ya fue finalizado.',
+            ]);
+        }
+
+        if ($this->hasExceededInactivityLimit($attempt)) {
+            throw ValidationException::withMessages([
+                'attempt' => __('practice.session_expired'),
             ]);
         }
 
@@ -212,12 +240,18 @@ class PracticeController extends Controller
 
         $isCorrect = $selectedOptionIds->all() === $correctOptionIds->all();
 
+        $timeSpentSeconds = min(300, (int) $request->integer('time_spent_seconds'));
+        $timeSpentSeconds = max(1, $timeSpentSeconds);
+
         AttemptAnswer::query()->create([
             'attempt_id' => $attempt->id,
             'question_id' => $questionId,
             'selected_options' => $selectedOptionIds->all(),
             'is_correct' => $isCorrect,
+            'time_spent_seconds' => $timeSpentSeconds,
         ]);
+
+        $this->markAttemptActivity($attempt);
 
         $answeredCountAfter = $answeredCount + 1;
 
@@ -269,6 +303,7 @@ class PracticeController extends Controller
         $totalQuestions = count($attempt->question_ids ?? []);
         $correctCount = $attempt->answers()->where('is_correct', true)->count();
         $incorrectCount = max(0, $totalQuestions - $correctCount);
+        $totalTimeSeconds = (int) $attempt->answers()->sum('time_spent_seconds');
 
         return [
             'attemptId' => $attempt->id,
@@ -276,8 +311,13 @@ class PracticeController extends Controller
             'correct_count' => $correctCount,
             'incorrect_count' => $incorrectCount,
             'total_questions' => $totalQuestions,
+            // Keep compatibility with already-cached frontend bundles.
             'started_at' => $attempt->started_at,
             'finished_at' => $attempt->finished_at,
+            'total_time_seconds' => $totalTimeSeconds,
+            'average_time_per_question_seconds' => $totalQuestions > 0
+                ? (int) ceil($totalTimeSeconds / $totalQuestions)
+                : 0,
         ];
     }
 
@@ -293,6 +333,32 @@ class PracticeController extends Controller
         $attempt->update([
             'status' => Attempt::STATUS_FINISHED,
             'score' => $score,
+            'finished_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    private function hasExceededInactivityLimit(Attempt $attempt): bool
+    {
+        if ($attempt->last_activity_at === null) {
+            return false;
+        }
+
+        return $attempt->last_activity_at
+            ->lt(now()->subMinutes(Attempt::INACTIVITY_LIMIT_MINUTES));
+    }
+
+    private function markAttemptActivity(Attempt $attempt): void
+    {
+        $attempt->update([
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    private function expireAttempt(Attempt $attempt): void
+    {
+        $attempt->update([
+            'status' => Attempt::STATUS_EXPIRED,
             'finished_at' => now(),
         ]);
     }

@@ -39,6 +39,7 @@ class PracticeFlowTest extends TestCase
         $this->post(route('practice.answer', $attempt), [
             'question_id' => $question->id,
             'selected_options' => [$question->options->first()->id],
+            'time_spent_seconds' => 12,
         ])->assertRedirect(route('login'));
 
         $this->post(route('practice.finish', $attempt))
@@ -206,6 +207,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $correctAttempt), [
                 'question_id' => $question->id,
                 'selected_options' => [$correctOptionId],
+                'time_spent_seconds' => 45,
             ])
             ->assertOk()
             ->assertJson([
@@ -219,6 +221,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $wrongAttempt), [
                 'question_id' => $question->id,
                 'selected_options' => [$wrongOptionId],
+                'time_spent_seconds' => 30,
             ])
             ->assertOk()
             ->assertJson([
@@ -248,6 +251,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $correctAttempt), [
                 'question_id' => $question->id,
                 'selected_options' => $correctOptionIds,
+                'time_spent_seconds' => 120,
             ])
             ->assertOk()
             ->assertJson([
@@ -258,6 +262,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $incorrectAttempt), [
                 'question_id' => $question->id,
                 'selected_options' => [$correctOptionIds[0], $incorrectOptionId],
+                'time_spent_seconds' => 180,
             ])
             ->assertOk()
             ->assertJson([
@@ -278,6 +283,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $attempt), [
                 'question_id' => $outsideQuestion->id,
                 'selected_options' => [$outsideOptionId],
+                'time_spent_seconds' => 10,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['question_id']);
@@ -286,6 +292,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $attempt), [
                 'question_id' => $attemptQuestion->id,
                 'selected_options' => [$outsideOptionId],
+                'time_spent_seconds' => 10,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['selected_options']);
@@ -302,6 +309,7 @@ class PracticeFlowTest extends TestCase
         $payload = [
             'question_id' => $question->id,
             'selected_options' => [$correctOptionId],
+            'time_spent_seconds' => 25,
         ];
 
         $this->actingAs($user)
@@ -312,6 +320,138 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $attempt), $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['attempt']);
+    }
+
+    public function test_answer_clamps_time_spent_seconds_between_one_and_three_hundred(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+        $correctOptionId = $question->options->firstWhere('is_correct', true)->id;
+
+        $attemptWithLongTime = $this->createActiveAttempt($user, [$question->id]);
+        $attemptWithZeroTime = $this->createActiveAttempt($user, [$question->id]);
+
+        $this->actingAs($user)
+            ->postJson(route('practice.answer', $attemptWithLongTime), [
+                'question_id' => $question->id,
+                'selected_options' => [$correctOptionId],
+                'time_spent_seconds' => 9999,
+            ])
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->postJson(route('practice.answer', $attemptWithZeroTime), [
+                'question_id' => $question->id,
+                'selected_options' => [$correctOptionId],
+                'time_spent_seconds' => 0,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attempt_answers', [
+            'attempt_id' => $attemptWithLongTime->id,
+            'question_id' => $question->id,
+            'time_spent_seconds' => 300,
+        ]);
+
+        $this->assertDatabaseHas('attempt_answers', [
+            'attempt_id' => $attemptWithZeroTime->id,
+            'question_id' => $question->id,
+            'time_spent_seconds' => 1,
+        ]);
+    }
+
+    public function test_answer_defaults_time_spent_seconds_when_not_sent(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+        $correctOptionId = $question->options->firstWhere('is_correct', true)->id;
+
+        $attempt = $this->createActiveAttempt($user, [$question->id]);
+
+        $this->actingAs($user)
+            ->postJson(route('practice.answer', $attempt), [
+                'question_id' => $question->id,
+                'selected_options' => [$correctOptionId],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attempt_answers', [
+            'attempt_id' => $attempt->id,
+            'question_id' => $question->id,
+            'time_spent_seconds' => 1,
+        ]);
+    }
+
+    public function test_show_displays_paused_view_when_attempt_exceeds_inactivity_limit(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+
+        $attempt = $this->createActiveAttempt($user, [$question->id]);
+        $attempt->update([
+            'last_activity_at' => now()->subMinutes(31),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.show', $attempt))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Paused')
+                ->where('attemptId', $attempt->id)
+                ->where('inactivity_limit_minutes', Attempt::INACTIVITY_LIMIT_MINUTES),
+            );
+    }
+
+    public function test_start_with_restart_flag_expires_previous_active_attempt_and_creates_a_new_one(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+
+        $existingAttempt = $this->createActiveAttempt($user, [$question->id]);
+
+        for ($index = 0; $index < 5; $index++) {
+            $this->createSingleQuestion();
+        }
+
+        $response = $this->actingAs($user)->post(route('practice.start'), [
+            'restart' => 1,
+        ]);
+
+        $existingAttempt->refresh();
+        $this->assertSame(Attempt::STATUS_EXPIRED, $existingAttempt->status);
+
+        $newAttempt = Attempt::query()
+            ->where('user_id', $user->id)
+            ->where('status', Attempt::STATUS_ACTIVE)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($newAttempt);
+        $this->assertNotSame($existingAttempt->id, $newAttempt->id);
+        $this->assertNotNull($newAttempt->last_activity_at);
+        $response->assertRedirect(route('practice.show', $newAttempt));
+    }
+
+    public function test_show_resume_query_allows_continuing_after_inactivity_pause(): void
+    {
+        $user = User::factory()->create();
+        $question = $this->createSingleQuestion();
+        $attempt = $this->createActiveAttempt($user, [$question->id]);
+
+        $attempt->update([
+            'last_activity_at' => now()->subMinutes(31),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('practice.show', ['attempt' => $attempt->id, 'resume' => 1]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Practice/Question')
+                ->where('attemptId', $attempt->id),
+            );
+
+        $attempt->refresh();
+        $this->assertTrue($attempt->last_activity_at?->greaterThan(now()->subMinute()) ?? false);
     }
 
     public function test_finish_marks_attempt_as_finished_and_calculates_score()
@@ -376,6 +516,7 @@ class PracticeFlowTest extends TestCase
             ->postJson(route('practice.answer', $attempt), [
                 'question_id' => $question->id,
                 'selected_options' => [$correctOptionId],
+                'time_spent_seconds' => 10,
             ])
             ->assertForbidden();
 

@@ -72,6 +72,7 @@ class DashboardStatsTest extends TestCase
             'question_id' => $firstQuestion->id,
             'selected_options' => [],
             'is_correct' => true,
+            'time_spent_seconds' => 300,
         ]);
 
         AttemptAnswer::factory()->create([
@@ -79,6 +80,7 @@ class DashboardStatsTest extends TestCase
             'question_id' => $firstQuestion->id,
             'selected_options' => [],
             'is_correct' => false,
+            'time_spent_seconds' => 300,
         ]);
 
         AttemptAnswer::factory()->create([
@@ -86,6 +88,7 @@ class DashboardStatsTest extends TestCase
             'question_id' => $secondQuestion->id,
             'selected_options' => [],
             'is_correct' => false,
+            'time_spent_seconds' => 300,
         ]);
 
         $response = $this->actingAs($user)->getJson(route('dashboard.stats'));
@@ -94,7 +97,7 @@ class DashboardStatsTest extends TestCase
         $response->assertJsonPath('total_attempts', 2);
         $response->assertJsonPath('average_score', 60);
         $response->assertJsonPath('best_score', 80);
-        $response->assertJsonPath('total_time', 20);
+        $response->assertJsonPath('total_time', 15);
         $response->assertJsonPath('incorrect_count', 2);
 
         $this->assertSame($secondCategory->id, $response->json('category_performance.0.category_id'));
@@ -130,13 +133,22 @@ class DashboardStatsTest extends TestCase
     public function test_dashboard_stats_normalizes_short_duration_to_whole_minute()
     {
         $user = User::factory()->create();
+        $question = Question::factory()->create();
 
-        Attempt::factory()->for($user)->create([
+        $attempt = Attempt::factory()->for($user)->create([
             'status' => Attempt::STATUS_FINISHED,
-            'question_ids' => [],
+            'question_ids' => [$question->id],
             'score' => 75,
             'started_at' => now()->subSeconds(22),
             'finished_at' => now(),
+        ]);
+
+        AttemptAnswer::factory()->create([
+            'attempt_id' => $attempt->id,
+            'question_id' => $question->id,
+            'selected_options' => [],
+            'is_correct' => true,
+            'time_spent_seconds' => 22,
         ]);
 
         $response = $this->actingAs($user)->getJson(route('dashboard.stats'));

@@ -22,8 +22,8 @@ type Props = {
     correct_count: number;
     incorrect_count: number;
     total_questions: number;
-    started_at: string | null;
-    finished_at: string | null;
+    total_time_seconds: number;
+    average_time_per_question_seconds: number;
 };
 
 const props = defineProps<Props>();
@@ -37,20 +37,52 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const scoreValue = computed(() => Math.round(Number(props.score ?? 0)));
 
-const durationInMinutes = computed(() => {
-    if (!props.started_at || !props.finished_at) {
-        return null;
-    }
+const totalTimeInSeconds = computed(() => {
+    const totalSeconds = Number(props.total_time_seconds);
 
-    const startDate = new Date(props.started_at);
-    const endDate = new Date(props.finished_at);
-    const diffMs = endDate.getTime() - startDate.getTime();
-
-    if (Number.isNaN(diffMs) || diffMs <= 0) {
+    if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
         return 0;
     }
 
-    return Math.ceil(diffMs / 60000);
+    return Math.ceil(totalSeconds);
+});
+
+const durationLabel = computed(() => {
+    const totalSeconds = totalTimeInSeconds.value;
+
+    if (totalSeconds <= 0) {
+        return trans('result.duration_not_available');
+    }
+
+    if (totalSeconds < 60) {
+        return trans('result.duration_seconds', {
+            seconds: String(totalSeconds),
+        });
+    }
+
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    if (seconds === 0) {
+        return trans('result.duration_minutes', {
+            minutes: String(minutes),
+        });
+    }
+
+    return trans('result.duration_minutes_seconds', {
+        minutes: String(minutes),
+        seconds: String(seconds),
+    });
+});
+
+const averageTimePerQuestionInSeconds = computed(() => {
+    const averageSeconds = Number(props.average_time_per_question_seconds);
+
+    if (!Number.isFinite(averageSeconds) || averageSeconds <= 0) {
+        return 0;
+    }
+
+    return Math.ceil(averageSeconds);
 });
 </script>
 
@@ -101,14 +133,16 @@ const durationInMinutes = computed(() => {
                 <CardFooter
                     class="flex flex-col items-start gap-3 border-t pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
                 >
-                    <p v-if="durationInMinutes !== null">
+                    <p>
+                        {{ durationLabel }}
+                    </p>
+                    <p>
                         {{
-                            trans('result.duration', {
-                                minutes: String(durationInMinutes),
+                            trans('result.average_time_per_question', {
+                                seconds: String(averageTimePerQuestionInSeconds),
                             })
                         }}
                     </p>
-                    <p v-else>{{ trans('result.duration_not_available') }}</p>
                 </CardFooter>
             </Card>
 

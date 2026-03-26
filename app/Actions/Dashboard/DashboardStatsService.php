@@ -31,6 +31,7 @@ class DashboardStatsService
         $finishedAttempts = Attempt::query()
             ->whereBelongsTo($user)
             ->where('status', Attempt::STATUS_FINISHED)
+            ->withSum('answers as total_time_seconds', 'time_spent_seconds')
             ->get(['id', 'score', 'started_at', 'finished_at', 'created_at']);
 
         $totalAttempts = $finishedAttempts->count();
@@ -40,7 +41,9 @@ class DashboardStatsService
         $bestScore = $totalAttempts > 0
             ? round((float) $finishedAttempts->max(fn (Attempt $attempt): float => (float) ($attempt->score ?? 0)), 2)
             : 0.0;
-        $totalTime = (int) $finishedAttempts->sum(fn (Attempt $attempt): int => $this->durationInMinutes($attempt));
+        $totalTimeInSeconds = (int) $finishedAttempts
+            ->sum(fn (Attempt $attempt): int => (int) ($attempt->total_time_seconds ?? 0));
+        $totalTime = $this->secondsToMinutes($totalTimeInSeconds);
 
         $categoryPerformance = [];
 
@@ -86,6 +89,7 @@ class DashboardStatsService
         $recentAttempts = Attempt::query()
             ->whereBelongsTo($user)
             ->where('status', Attempt::STATUS_FINISHED)
+            ->withSum('answers as total_time_seconds', 'time_spent_seconds')
             ->latest('finished_at')
             ->limit(5)
             ->get(['id', 'score', 'started_at', 'finished_at', 'created_at'])
@@ -110,12 +114,11 @@ class DashboardStatsService
 
     private function durationInMinutes(Attempt $attempt): int
     {
-        if ($attempt->started_at === null || $attempt->finished_at === null) {
-            return 0;
-        }
+        return $this->secondsToMinutes((int) ($attempt->total_time_seconds ?? 0));
+    }
 
-        $durationInSeconds = $attempt->started_at->diffInSeconds($attempt->finished_at, false);
-
+    private function secondsToMinutes(int $durationInSeconds): int
+    {
         if ($durationInSeconds <= 0) {
             return 0;
         }

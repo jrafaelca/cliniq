@@ -8,7 +8,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['attempt_id', 'question_id', 'selected_options', 'is_correct'])]
+#[Fillable([
+    'attempt_id',
+    'question_id',
+    'selected_options',
+    'is_correct',
+    'time_spent_seconds',
+])]
 class AttemptAnswer extends Model
 {
     /** @use HasFactory<AttemptAnswerFactory> */
@@ -24,6 +30,7 @@ class AttemptAnswer extends Model
         return [
             'selected_options' => 'array',
             'is_correct' => 'boolean',
+            'time_spent_seconds' => 'integer',
         ];
     }
 

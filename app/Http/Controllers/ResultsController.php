@@ -17,6 +17,7 @@ class ResultsController extends Controller
         $attemptsPaginator = $request->user()
             ->attempts()
             ->where('status', Attempt::STATUS_FINISHED)
+            ->withSum('answers as total_time_seconds', 'time_spent_seconds')
             ->latest('finished_at')
             ->paginate(10)
             ->withQueryString();
@@ -49,11 +50,7 @@ class ResultsController extends Controller
 
     private function durationInMinutes(Attempt $attempt): int
     {
-        if ($attempt->started_at === null || $attempt->finished_at === null) {
-            return 0;
-        }
-
-        $durationInSeconds = $attempt->started_at->diffInSeconds($attempt->finished_at, false);
+        $durationInSeconds = (int) ($attempt->total_time_seconds ?? 0);
 
         if ($durationInSeconds <= 0) {
             return 0;

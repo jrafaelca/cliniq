@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'status',
     'question_ids',
     'started_at',
+    'last_activity_at',
     'finished_at',
     'score',
 ])]
@@ -26,6 +27,10 @@ class Attempt extends Model
 
     public const STATUS_FINISHED = 'finished';
 
+    public const STATUS_EXPIRED = 'expired';
+
+    public const INACTIVITY_LIMIT_MINUTES = 30;
+
     /**
      * Get the attributes that should be cast.
      *
@@ -36,6 +41,7 @@ class Attempt extends Model
         return [
             'question_ids' => 'array',
             'started_at' => 'datetime',
+            'last_activity_at' => 'datetime',
             'finished_at' => 'datetime',
             'score' => 'decimal:2',
         ];

@@ -39,6 +39,7 @@ class ReviewController extends Controller
             'status' => Attempt::STATUS_ACTIVE,
             'question_ids' => $questionIds,
             'started_at' => now(),
+            'last_activity_at' => now(),
         ]);
 
         return to_route('practice.show', $attempt);

@@ -18,6 +18,7 @@ class AnswerQuestionRequest extends FormRequest
             'question_id' => ['required', 'integer', 'exists:questions,id'],
             'selected_options' => ['required', 'array', 'min:1'],
             'selected_options.*' => ['required', 'integer', 'distinct', 'exists:question_options,id'],
+            'time_spent_seconds' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 }

@@ -71,13 +71,22 @@ class ResultsAndReviewTest extends TestCase
     public function test_results_normalizes_short_duration_to_whole_minute()
     {
         $user = User::factory()->create();
+        $question = Question::factory()->create();
 
-        Attempt::factory()->for($user)->create([
+        $attempt = Attempt::factory()->for($user)->create([
             'status' => Attempt::STATUS_FINISHED,
-            'question_ids' => [],
+            'question_ids' => [$question->id],
             'score' => 90,
             'started_at' => now()->subSeconds(22),
             'finished_at' => now(),
+        ]);
+
+        AttemptAnswer::factory()->create([
+            'attempt_id' => $attempt->id,
+            'question_id' => $question->id,
+            'selected_options' => [],
+            'is_correct' => true,
+            'time_spent_seconds' => 22,
         ]);
 
         $this->actingAs($user)
