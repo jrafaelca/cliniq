@@ -15,6 +15,24 @@ use Inertia\Response;
 class PracticeController extends Controller
 {
     /**
+     * Resolve the practice landing action from navigation.
+     */
+    public function index(Request $request): RedirectResponse
+    {
+        $activeAttempt = $request->user()
+            ->attempts()
+            ->where('status', Attempt::STATUS_ACTIVE)
+            ->latest('started_at')
+            ->first();
+
+        if ($activeAttempt !== null) {
+            return to_route('practice.show', $activeAttempt);
+        }
+
+        return to_route('dashboard');
+    }
+
+    /**
      * Start a new practice attempt or resume the active one.
      */
     public function start(Request $request): RedirectResponse

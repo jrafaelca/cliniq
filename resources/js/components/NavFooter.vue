@@ -2,6 +2,7 @@
 import {
     SidebarGroup,
     SidebarGroupContent,
+    SidebarGroupLabel,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
@@ -11,6 +12,7 @@ import type { NavItem } from '@/types';
 
 type Props = {
     items: NavItem[];
+    label?: string;
     class?: string;
 };
 
@@ -21,13 +23,11 @@ defineProps<Props>();
     <SidebarGroup
         :class="`group-data-[collapsible=icon]:p-0 ${$props.class || ''}`"
     >
+        <SidebarGroupLabel v-if="label">{{ label }}</SidebarGroupLabel>
         <SidebarGroupContent>
             <SidebarMenu>
                 <SidebarMenuItem v-for="item in items" :key="item.title">
-                    <SidebarMenuButton
-                        class="text-neutral-600 hover:text-neutral-800 dark:text-neutral-300 dark:hover:text-neutral-100"
-                        as-child
-                    >
+                    <SidebarMenuButton as-child>
                         <a
                             :href="toUrl(item.href)"
                             target="_blank"

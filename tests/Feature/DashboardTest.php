@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attempt;
+use App\Models\AttemptAnswer;
 use App\Models\Category;
 use App\Models\Question;
+use App\Models\QuestionOption;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -76,6 +79,48 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('hasQuestions', true),
+            );
+    }
+
+    public function test_dashboard_exposes_remaining_questions_for_active_attempt()
+    {
+        $user = User::factory()->create();
+        $question = Question::factory()->create();
+
+        $attempt = Attempt::factory()->for($user)->create([
+            'status' => Attempt::STATUS_ACTIVE,
+            'question_ids' => [$question->id],
+            'started_at' => now()->subMinutes(5),
+        ]);
+
+        AttemptAnswer::factory()->create([
+            'attempt_id' => $attempt->id,
+            'question_id' => $question->id,
+            'selected_options' => [QuestionOption::factory()->for($question)->create()->id],
+            'is_correct' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('activeAttemptId', $attempt->id)
+                ->where('activeAttemptRemainingQuestions', 0),
+            );
+    }
+
+    public function test_dashboard_exposes_review_error_flash_message()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->withSession([
+                'review_error' => __('review.no_incorrect_questions'),
+            ])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('reviewError', __('review.no_incorrect_questions')),
             );
     }
 }

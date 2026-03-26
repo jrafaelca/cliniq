@@ -50,7 +50,7 @@ const durationInMinutes = computed(() => {
         return 0;
     }
 
-    return Math.round(diffMs / 60000);
+    return Math.ceil(diffMs / 60000);
 });
 </script>
 
